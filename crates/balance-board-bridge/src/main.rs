@@ -20,7 +20,7 @@
 //! - `--no-smooth` — disable the low-pass filter; raw COG goes straight to vJoy.
 
 use balance_board_io::{BalanceBoardSource, HidApiBoard};
-use balance_board_protocol::{Calibration, LowPass2D};
+use balance_board_protocol::{BoardReport, CalibratedSensors, Calibration, LowPass2D};
 
 mod cache;
 
@@ -122,42 +122,98 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("\nStreaming. Ctrl-C to stop.");
     loop {
         let report = board.next_report()?;
-        let kg = cal.calibrate(report.sensors);
-        let cog = kg.center_of_gravity(MIN_TOTAL_KG);
-        let button = report.buttons.balance_board_button();
-
-        // Tare → clamp → smooth. When the board reads as unloaded we feed
-        // (0, 0) so the filter walks back to center instead of holding the
-        // last lean. Players can lift their feet without "joystick stuck".
-        let (x_in, y_in) = match cog {
-            Some(c) => (
-                (c.x - tare_x).clamp(-1.0, 1.0),
-                (c.y - tare_y).clamp(-1.0, 1.0),
-            ),
-            None => (0.0, 0.0),
-        };
-        let (x, y) = filter.update(x_in, y_in);
+        let processed = process_report(&report, &cal, (tare_x, tare_y), &mut filter);
 
         #[cfg(windows)]
         {
-            vjoy.set_axis_normalized(VJoyAxis::X, x);
-            vjoy.set_axis_normalized(VJoyAxis::Y, y);
-            vjoy.set_axis_normalized(VJoyAxis::Z,  per_corner_axis(kg.top_right));
-            vjoy.set_axis_normalized(VJoyAxis::Rx, per_corner_axis(kg.bottom_right));
-            vjoy.set_axis_normalized(VJoyAxis::Ry, per_corner_axis(kg.top_left));
-            vjoy.set_axis_normalized(VJoyAxis::Rz, per_corner_axis(kg.bottom_left));
+            vjoy.set_axis_normalized(VJoyAxis::X, processed.cog_x);
+            vjoy.set_axis_normalized(VJoyAxis::Y, processed.cog_y);
+            vjoy.set_axis_normalized(VJoyAxis::Z,  processed.corner_axes[0]);
+            vjoy.set_axis_normalized(VJoyAxis::Rx, processed.corner_axes[1]);
+            vjoy.set_axis_normalized(VJoyAxis::Ry, processed.corner_axes[2]);
+            vjoy.set_axis_normalized(VJoyAxis::Rz, processed.corner_axes[3]);
             // The board's front-edge SYNC button surfaces as vJoy
             // button 1; Steam Input can bind it to anything.
-            vjoy.set_button(1, button);
+            vjoy.set_button(1, processed.button);
         }
 
         #[cfg(not(windows))]
         {
-            let tag = if cog.is_some() { "" } else { " (unloaded)" };
-            let btn = if button { " btn" } else { "" };
-            println!("kg={:.1} x={x:+.2} y={y:+.2}{tag}{btn}", kg.total_kg());
+            let tag = if processed.cog_loaded { "" } else { " (unloaded)" };
+            let btn = if processed.button { " btn" } else { "" };
+            println!(
+                "kg={:.1} x={:+.2} y={:+.2}{tag}{btn}",
+                processed.total_kg, processed.cog_x, processed.cog_y
+            );
         }
     }
+}
+
+/// Result of running one [`BoardReport`] through the bridge's
+/// tare → clamp → smooth → corner-axis pipeline. Pure data; the
+/// caller wires it to a vJoy device (or a print loop, in tests
+/// or non-Windows builds).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Processed {
+    /// Smoothed COG x in `[-1, +1]`, after tare offset and clamp.
+    cog_x: f32,
+    /// Smoothed COG y in `[-1, +1]`, after tare offset and clamp.
+    cog_y: f32,
+    /// `false` when the board reports below `MIN_TOTAL_KG` and the
+    /// COG was therefore replaced with `(0, 0)` for filter input.
+    cog_loaded: bool,
+    /// Per-corner load mapped to `[-1, +1]` via [`per_corner_axis`],
+    /// in report order: TR, BR, TL, BL.
+    corner_axes: [f32; 4],
+    /// Total weight on the board in kg (sum of the four calibrated
+    /// sensors). Useful for status output and threshold logic.
+    total_kg: f32,
+    /// `true` if the Balance Board's front-edge SYNC button was
+    /// pressed in this report.
+    button: bool,
+}
+
+/// Run one report through the bridge's signal-processing pipeline.
+///
+/// Pure function — no I/O, no time, fully deterministic given a
+/// freshly-reset filter and a fixed tare. This is what the bridge
+/// tests exercise instead of mocking vJoy and an HID source.
+fn process_report(
+    report: &BoardReport,
+    cal: &Calibration,
+    tare: (f32, f32),
+    filter: &mut LowPass2D,
+) -> Processed {
+    let kg = cal.calibrate(report.sensors);
+    let cog = kg.center_of_gravity(MIN_TOTAL_KG);
+    let cog_loaded = cog.is_some();
+
+    let (x_in, y_in) = match cog {
+        Some(c) => (
+            (c.x - tare.0).clamp(-1.0, 1.0),
+            (c.y - tare.1).clamp(-1.0, 1.0),
+        ),
+        None => (0.0, 0.0),
+    };
+    let (cog_x, cog_y) = filter.update(x_in, y_in);
+
+    Processed {
+        cog_x,
+        cog_y,
+        cog_loaded,
+        corner_axes: corner_axes(&kg),
+        total_kg: kg.total_kg(),
+        button: report.buttons.balance_board_button(),
+    }
+}
+
+fn corner_axes(kg: &CalibratedSensors) -> [f32; 4] {
+    [
+        per_corner_axis(kg.top_right),
+        per_corner_axis(kg.bottom_right),
+        per_corner_axis(kg.top_left),
+        per_corner_axis(kg.bottom_left),
+    ]
 }
 
 /// Try the on-disk cache first; on miss, corrupt cache, or
@@ -237,4 +293,143 @@ fn capture_tare(
 fn per_corner_axis(kg: f32) -> f32 {
     let t = (kg / PER_CORNER_FULL_SCALE_KG).clamp(0.0, 1.0);
     t * 2.0 - 1.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use balance_board_protocol::{RawSensors, SensorQuad, WiimoteButtons};
+
+    /// Calibration where every sensor reads 5000 raw at 0kg, 10000 at 17kg,
+    /// 15000 at 34kg — same shape the protocol crate's tests use, easy to
+    /// reason about in head math.
+    fn uniform_cal() -> Calibration {
+        let pt = |v| SensorQuad { top_right: v, bottom_right: v, top_left: v, bottom_left: v };
+        Calibration { kg0: pt(5000), kg17: pt(10000), kg34: pt(15000) }
+    }
+
+    fn report(tr: u16, br: u16, tl: u16, bl: u16, button: bool) -> BoardReport {
+        BoardReport {
+            sensors: RawSensors {
+                top_right: tr,
+                bottom_right: br,
+                top_left: tl,
+                bottom_left: bl,
+            },
+            // bit 3 of byte 2 = A button = the firmware-typical Balance
+            // Board button bit. With `balance_board_button()` returning
+            // OR-of-all-bits, any non-zero second byte trips it.
+            buttons: WiimoteButtons::from_bytes(0, if button { 0x08 } else { 0x00 }),
+        }
+    }
+
+    /// Each sensor at 17 kg cal point and equal load — perfectly centered.
+    fn balanced_17kg() -> BoardReport {
+        report(10000, 10000, 10000, 10000, false)
+    }
+
+    /// alpha = 1.0 → filter is passthrough; we get the input out
+    /// unchanged after one update.
+    fn passthrough_filter() -> LowPass2D {
+        LowPass2D::new(1.0)
+    }
+
+    #[test]
+    fn balanced_load_with_zero_tare_centers_cog() {
+        let cal = uniform_cal();
+        let mut filt = passthrough_filter();
+        let r = balanced_17kg();
+        let p = process_report(&r, &cal, (0.0, 0.0), &mut filt);
+        assert!(p.cog_loaded);
+        assert!(p.cog_x.abs() < 1e-3);
+        assert!(p.cog_y.abs() < 1e-3);
+        assert!((p.total_kg - 68.0).abs() < 1e-3);
+        assert!(!p.button);
+    }
+
+    #[test]
+    fn tare_offset_is_subtracted() {
+        let cal = uniform_cal();
+        let mut filt = passthrough_filter();
+        let r = balanced_17kg();
+        // Pretend the user's natural stance was at (+0.20, -0.10);
+        // a centered-at-zero report should now read (-0.20, +0.10).
+        let p = process_report(&r, &cal, (0.20, -0.10), &mut filt);
+        assert!((p.cog_x - (-0.20)).abs() < 1e-3);
+        assert!((p.cog_y - 0.10).abs() < 1e-3);
+    }
+
+    #[test]
+    fn tared_lean_clamps_to_unit() {
+        let cal = uniform_cal();
+        let mut filt = passthrough_filter();
+        // All weight on right side at 17 kg per sensor: COG x = +1.0.
+        let r = report(10000, 10000, 5000, 5000, false);
+        // Tare of -0.5 would push x to +1.5 without clamping; expect +1.0.
+        let p = process_report(&r, &cal, (-0.5, 0.0), &mut filt);
+        assert!((p.cog_x - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn unloaded_board_emits_centered_cog() {
+        let cal = uniform_cal();
+        let mut filt = passthrough_filter();
+        // All sensors at 0kg cal point: total weight 0, COG undefined.
+        let r = report(5000, 5000, 5000, 5000, false);
+        let p = process_report(&r, &cal, (0.0, 0.0), &mut filt);
+        assert!(!p.cog_loaded);
+        assert_eq!(p.cog_x, 0.0);
+        assert_eq!(p.cog_y, 0.0);
+    }
+
+    #[test]
+    fn button_propagates_through_pipeline() {
+        let cal = uniform_cal();
+        let mut filt = passthrough_filter();
+        let r = report(10000, 10000, 10000, 10000, true);
+        let p = process_report(&r, &cal, (0.0, 0.0), &mut filt);
+        assert!(p.button);
+    }
+
+    #[test]
+    fn smoothing_attenuates_first_step() {
+        let cal = uniform_cal();
+        let mut filt = LowPass2D::new(0.4);
+        // Warm filter to (0, 0) with one passthrough update.
+        let _ = filt.update(0.0, 0.0);
+        // Hard right lean: raw COG x = +1.0.
+        let r = report(10000, 10000, 5000, 5000, false);
+        let p = process_report(&r, &cal, (0.0, 0.0), &mut filt);
+        // alpha=0.4 → first step lands 40% of the way to +1.0.
+        assert!((p.cog_x - 0.4).abs() < 1e-3);
+    }
+
+    #[test]
+    fn corner_axes_in_report_order_and_full_scale() {
+        let cal = uniform_cal();
+        let mut filt = passthrough_filter();
+        // Construct sensors so each corner is exactly at full-scale kg.
+        // PER_CORNER_FULL_SCALE_KG = 50; at uniform_cal that's raw value
+        // ~17647 (50 kg ≈ 14706 + bit; let's use 18382). Easier to just
+        // hand-build CalibratedSensors via... wait, we don't expose that
+        // through process_report. Use the kg17 point per sensor (= 17 kg)
+        // and confirm corner_axes produce 17/50 → -1 + 2*(17/50) = -0.32.
+        let r = report(10000, 10000, 10000, 10000, false);
+        let p = process_report(&r, &cal, (0.0, 0.0), &mut filt);
+        let expected = -1.0 + 2.0 * (17.0 / PER_CORNER_FULL_SCALE_KG);
+        for a in p.corner_axes {
+            assert!((a - expected).abs() < 1e-3, "got {a}, expected {expected}");
+        }
+    }
+
+    #[test]
+    fn per_corner_axis_clamps_above_full_scale() {
+        // 200 kg on one corner is way above the 50 kg full-scale.
+        assert_eq!(per_corner_axis(200.0), 1.0);
+    }
+
+    #[test]
+    fn per_corner_axis_zero_at_zero_kg() {
+        assert_eq!(per_corner_axis(0.0), -1.0);
+    }
 }
