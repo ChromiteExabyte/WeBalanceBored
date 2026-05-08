@@ -5,8 +5,23 @@
 //! payload at different offsets; this module translates a few common ones
 //! into [`RawSensors`].
 
+use crate::buttons::WiimoteButtons;
 use crate::error::ParseError;
 use crate::sensors::RawSensors;
+
+/// Everything we extract from a Wiimote core-data HID report: the four
+/// Balance Board sensors and the Wiimote button bitfield.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BoardReport {
+    /// The four corner sensors (top-right, bottom-right, top-left,
+    /// bottom-left), still as raw 16-bit values — calibration happens
+    /// downstream.
+    pub sensors: RawSensors,
+    /// Wiimote button state from the report's first two payload bytes.
+    /// On a Balance Board, the only physical button (front-edge SYNC)
+    /// is exposed via [`WiimoteButtons::balance_board_button`].
+    pub buttons: WiimoteButtons,
+}
 
 /// Wiimote/Balance Board HID report ID.
 ///
@@ -63,11 +78,11 @@ pub fn parse_report_extension(ext: &[u8; 8]) -> RawSensors {
     }
 }
 
-/// Parse a full Wiimote HID report and extract the Balance Board payload.
+/// Parse a full Wiimote HID report into a [`BoardReport`] (sensors + buttons).
 ///
 /// Supported report IDs: `0x32` (Core Buttons + 8 Extension) and `0x34`
 /// (Core Buttons + 19 Extension). Returns [`ParseError`] for anything else.
-pub fn parse_report(report: &[u8]) -> Result<RawSensors, ParseError> {
+pub fn parse_report(report: &[u8]) -> Result<BoardReport, ParseError> {
     let &id_byte = report.first().ok_or(ParseError::EmptyReport)?;
     let id = ReportId::from_byte(id_byte)?;
     if report.len() < id.min_len() {
@@ -76,11 +91,13 @@ pub fn parse_report(report: &[u8]) -> Result<RawSensors, ParseError> {
             got: report.len(),
         });
     }
+    let buttons = WiimoteButtons::from_bytes(report[1], report[2]);
     let off = id.extension_offset();
     let ext: &[u8; 8] = report[off..off + 8]
         .try_into()
         .expect("bounds checked by min_len above");
-    Ok(parse_report_extension(ext))
+    let sensors = parse_report_extension(ext);
+    Ok(BoardReport { sensors, buttons })
 }
 
 #[cfg(test)]
@@ -102,11 +119,12 @@ mod tests {
         // 0x32 = report ID, 0x00 0x00 = core buttons, then 8 extension bytes.
         let mut report = vec![0x32, 0x00, 0x00];
         report.extend_from_slice(&[0x10, 0x00, 0x20, 0x00, 0x30, 0x00, 0x40, 0x00]);
-        let raw = parse_report(&report).unwrap();
-        assert_eq!(raw.top_right, 0x1000);
-        assert_eq!(raw.bottom_right, 0x2000);
-        assert_eq!(raw.top_left, 0x3000);
-        assert_eq!(raw.bottom_left, 0x4000);
+        let parsed = parse_report(&report).unwrap();
+        assert_eq!(parsed.sensors.top_right, 0x1000);
+        assert_eq!(parsed.sensors.bottom_right, 0x2000);
+        assert_eq!(parsed.sensors.top_left, 0x3000);
+        assert_eq!(parsed.sensors.bottom_left, 0x4000);
+        assert_eq!(parsed.buttons.raw(), 0);
     }
 
     #[test]
@@ -115,9 +133,19 @@ mod tests {
         // First 8 ext bytes are Balance Board; remaining 11 are filler we ignore.
         report.extend_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22]);
         report.extend_from_slice(&[0; 11]);
-        let raw = parse_report(&report).unwrap();
-        assert_eq!(raw.top_right, 0xAABB);
-        assert_eq!(raw.bottom_left, 0x1122);
+        let parsed = parse_report(&report).unwrap();
+        assert_eq!(parsed.sensors.top_right, 0xAABB);
+        assert_eq!(parsed.sensors.bottom_left, 0x1122);
+    }
+
+    #[test]
+    fn parses_button_a_pressed() {
+        // Same 0x32 report with byte 2 = 0x08 (A button).
+        let mut report = vec![0x32, 0x00, 0x08];
+        report.extend_from_slice(&[0; 8]);
+        let parsed = parse_report(&report).unwrap();
+        assert!(parsed.buttons.a());
+        assert!(parsed.buttons.balance_board_button());
     }
 
     #[test]

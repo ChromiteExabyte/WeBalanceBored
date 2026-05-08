@@ -121,9 +121,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     eprintln!("\nStreaming. Ctrl-C to stop.");
     loop {
-        let raw = board.next_report()?;
-        let kg = cal.calibrate(raw);
+        let report = board.next_report()?;
+        let kg = cal.calibrate(report.sensors);
         let cog = kg.center_of_gravity(MIN_TOTAL_KG);
+        let button = report.buttons.balance_board_button();
 
         // Tare → clamp → smooth. When the board reads as unloaded we feed
         // (0, 0) so the filter walks back to center instead of holding the
@@ -145,12 +146,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             vjoy.set_axis_normalized(VJoyAxis::Rx, per_corner_axis(kg.bottom_right));
             vjoy.set_axis_normalized(VJoyAxis::Ry, per_corner_axis(kg.top_left));
             vjoy.set_axis_normalized(VJoyAxis::Rz, per_corner_axis(kg.bottom_left));
+            // The board's front-edge SYNC button surfaces as vJoy
+            // button 1; Steam Input can bind it to anything.
+            vjoy.set_button(1, button);
         }
 
         #[cfg(not(windows))]
         {
             let tag = if cog.is_some() { "" } else { " (unloaded)" };
-            println!("kg={:.1} x={x:+.2} y={y:+.2}{tag}", kg.total_kg());
+            let btn = if button { " btn" } else { "" };
+            println!("kg={:.1} x={x:+.2} y={y:+.2}{tag}{btn}", kg.total_kg());
         }
     }
 }
@@ -204,8 +209,8 @@ fn capture_tare(
 
     // Phase 1: wait for someone to actually step on the board.
     loop {
-        let raw = board.next_report()?;
-        let kg = cal.calibrate(raw);
+        let report = board.next_report()?;
+        let kg = cal.calibrate(report.sensors);
         if kg.center_of_gravity(MIN_TOTAL_KG).is_some() {
             break;
         }
@@ -216,8 +221,8 @@ fn capture_tare(
     let mut sum_y = 0.0f32;
     let mut count = 0usize;
     while count < TARE_FRAMES {
-        let raw = board.next_report()?;
-        let kg = cal.calibrate(raw);
+        let report = board.next_report()?;
+        let kg = cal.calibrate(report.sensors);
         if let Some(c) = kg.center_of_gravity(MIN_TOTAL_KG) {
             sum_x += c.x;
             sum_y += c.y;

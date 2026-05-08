@@ -71,7 +71,6 @@ struct VJoyApi {
     relinquish: FnRelinquishVJD,
     reset: FnResetVJD,
     set_axis: FnSetAxis,
-    #[allow(dead_code)]
     set_btn: FnSetBtn,
 }
 
@@ -188,7 +187,6 @@ impl VJoyDevice {
     }
 
     /// Set a button (1-indexed). vJoy supports up to 128 buttons.
-    #[allow(dead_code)]
     pub fn set_button(&mut self, btn: u8, pressed: bool) {
         // SAFETY: see `acquire`.
         unsafe {

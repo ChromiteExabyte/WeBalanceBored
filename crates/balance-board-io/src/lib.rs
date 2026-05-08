@@ -17,9 +17,9 @@
 //! let mut board = HidApiBoard::open()?;
 //! let cal = Calibration::from_eeprom(&board.read_calibration_block()?)?;
 //! loop {
-//!     let raw = board.next_report()?;
-//!     let kg = cal.calibrate(raw);
-//!     println!("{:.1} kg", kg.total_kg());
+//!     let report = board.next_report()?;
+//!     let kg = cal.calibrate(report.sensors);
+//!     println!("{:.1} kg, button = {}", kg.total_kg(), report.buttons.balance_board_button());
 //! }
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
@@ -31,16 +31,16 @@ mod read_transaction;
 
 pub use hidapi_source::HidApiBoard;
 
-use balance_board_protocol::RawSensors;
+use balance_board_protocol::BoardReport;
 use std::io;
 
-/// A live source of raw Balance Board sensor reports.
+/// A live source of Balance Board reports.
 ///
 /// Implementations wrap whatever HID transport is in use. The default
 /// implementation is [`HidApiBoard`], which works on Windows, macOS, and
 /// Linux via the hidapi C library.
 pub trait BalanceBoardSource {
-    /// Block until the next sensor report arrives, then return it.
+    /// Block until the next report arrives, then return it.
     ///
     /// Non-sensor reports (status, register-read responses) that interleave
     /// with the sensor stream are silently skipped.
@@ -48,7 +48,7 @@ pub trait BalanceBoardSource {
     /// # Errors
     /// Returns an [`io::Error`] if the underlying transport fails (device
     /// unplugged, Bluetooth dropped, OS-level read error, etc.).
-    fn next_report(&mut self) -> io::Result<RawSensors>;
+    fn next_report(&mut self) -> io::Result<BoardReport>;
 
     /// Read the 24-byte EEPROM calibration block from the board.
     ///

@@ -4,7 +4,7 @@
 //! to a balance-board-friendly reporting mode) and exposes the live sensor
 //! stream plus EEPROM calibration via [`BalanceBoardSource`].
 
-use balance_board_protocol::{parse_report, RawSensors};
+use balance_board_protocol::{parse_report, BoardReport};
 use hidapi::{HidApi, HidDevice};
 use std::ffi::CString;
 use std::io;
@@ -217,7 +217,7 @@ impl HidApiBoard {
 }
 
 impl BalanceBoardSource for HidApiBoard {
-    fn next_report(&mut self) -> io::Result<RawSensors> {
+    fn next_report(&mut self) -> io::Result<BoardReport> {
         let mut buf = [0u8; 32];
         loop {
             let n = self.device.read(&mut buf).map_err(io_err)?;
@@ -227,8 +227,8 @@ impl BalanceBoardSource for HidApiBoard {
             // Skip anything that isn't a recognized sensor report —
             // status reports (0x20) and read responses (0x21) interleave
             // with the data stream and don't carry sensor values.
-            if let Ok(raw) = parse_report(&buf[..n]) {
-                return Ok(raw);
+            if let Ok(report) = parse_report(&buf[..n]) {
+                return Ok(report);
             }
         }
     }
