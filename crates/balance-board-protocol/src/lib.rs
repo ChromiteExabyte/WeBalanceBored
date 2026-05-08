@@ -26,11 +26,13 @@
 mod calibration;
 mod cog;
 mod error;
+mod filter;
 mod report;
 mod sensors;
 
 pub use calibration::{CalibratedSensors, Calibration};
 pub use cog::CenterOfGravity;
 pub use error::{CalibrationError, ParseError};
+pub use filter::LowPass2D;
 pub use report::{parse_report, parse_report_extension, ReportId};
 pub use sensors::{Corner, RawSensors, SensorQuad};
