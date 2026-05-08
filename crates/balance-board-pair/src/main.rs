@@ -87,10 +87,11 @@ fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     eprintln!(
-        "Press SYNC inside the battery cover, then waiting up to 20s for the \
-         board to appear..."
+        "Press SYNC inside the battery cover IMMEDIATELY before continuing.\n\
+         Scanning briefly (~5s), then authenticating. The Wii's SYNC window is\n\
+         short, so we keep the scan tight to leave time for the actual pairing."
     );
-    let result = pair_first(Duration::from_secs(20))?;
+    let result = pair_first(Duration::from_secs(5))?;
     if result.already_paired {
         eprintln!(
             "{name} ({addr}) was already paired; HID service re-enabled.",

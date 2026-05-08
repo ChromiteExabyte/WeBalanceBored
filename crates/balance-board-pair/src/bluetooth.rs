@@ -218,6 +218,7 @@ unsafe extern "system" fn auth_callback(
     auth_params: *const BLUETOOTH_AUTHENTICATION_CALLBACK_PARAMS,
 ) -> i32 {
     if pv_param.is_null() || auth_params.is_null() {
+        eprintln!("[auth_callback] null parameter, returning ERROR_INVALID_PARAMETER");
         return ERROR_INVALID_PARAMETER as i32;
     }
     // SAFETY: `pv_param` points at an `AuthContext` we registered and
@@ -226,6 +227,11 @@ unsafe extern "system" fn auth_callback(
     // SAFETY: `auth_params` is provided by the OS; valid for the
     // duration of the callback.
     let params = unsafe { &*auth_params };
+
+    eprintln!(
+        "[auth_callback] fired. negotiated authMethod = {} (1=legacy, 2=oob, 3=numeric, 4=passkey-keyboard, 5=passkey-display)",
+        params.authenticationMethod
+    );
 
     let mut response: BLUETOOTH_AUTHENTICATE_RESPONSE = unsafe { mem::zeroed() };
     response.bthAddressRemote = params.deviceInfo.Address;
@@ -238,7 +244,13 @@ unsafe extern "system" fn auth_callback(
 
     // SAFETY: `response` is fully initialized; `BluetoothSendAuthenticationResponseEx`
     // returns a Win32 error code (DWORD = u32).
-    unsafe { BluetoothSendAuthenticationResponseEx(ptr::null_mut(), &response) as i32 }
+    let rc = unsafe { BluetoothSendAuthenticationResponseEx(ptr::null_mut(), &response) };
+    eprintln!(
+        "[auth_callback] BluetoothSendAuthenticationResponseEx returned {} ({})",
+        rc,
+        if rc == 0 { "success" } else { "error" }
+    );
+    rc as i32
 }
 
 fn authenticate(info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
@@ -269,8 +281,12 @@ fn authenticate(info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
     if rc != ERROR_SUCCESS {
         // SAFETY: Box::from_raw on a pointer we created via into_raw.
         unsafe { drop(Box::from_raw(ctx_ptr)) };
-        return Err(io::Error::from_raw_os_error(rc as i32));
+        return Err(io::Error::other(format!(
+            "BluetoothRegisterForAuthenticationEx failed: os error {rc}"
+        )));
     }
+
+    eprintln!("[pair] auth callback registered, calling BluetoothAuthenticateDeviceEx...");
 
     // SAFETY: `info` is initialized.
     let auth_rc = unsafe {
@@ -278,10 +294,12 @@ fn authenticate(info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
             ptr::null_mut(), // hwndParent — none
             ptr::null_mut(), // hRadio — any
             info,
-            ptr::null_mut(), // OOB data — none
-            MITMProtectionNotRequired,
+            ptr::null_mut(),                  // OOB data — none
+            MITMProtectionNotRequiredBonding, // request persistent bonding (HID needs it)
         )
     };
+
+    eprintln!("[pair] BluetoothAuthenticateDeviceEx returned {auth_rc}");
 
     // SAFETY: matching unregister for the registration above.
     unsafe { BluetoothUnregisterAuthentication(reg_handle) };
@@ -289,7 +307,9 @@ fn authenticate(info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
     unsafe { drop(Box::from_raw(ctx_ptr)) };
 
     if auth_rc != ERROR_SUCCESS {
-        return Err(io::Error::from_raw_os_error(auth_rc as i32));
+        return Err(io::Error::other(format!(
+            "BluetoothAuthenticateDeviceEx failed: os error {auth_rc}"
+        )));
     }
     Ok(())
 }
@@ -309,7 +329,10 @@ fn enable_hid_service(info: &BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
         BluetoothSetServiceState(ptr::null_mut(), info, &hid_guid, BLUETOOTH_SERVICE_ENABLE)
     };
     if rc != ERROR_SUCCESS {
-        return Err(io::Error::from_raw_os_error(rc as i32));
+        return Err(io::Error::other(format!(
+            "BluetoothSetServiceState (HID enable) failed: os error {rc}"
+        )));
     }
+    eprintln!("[pair] HID service enabled.");
     Ok(())
 }
