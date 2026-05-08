@@ -1,5 +1,7 @@
 # WeBalanceBored
 
+[![CI](https://github.com/ChromiteExabyte/WeBalanceBored/actions/workflows/ci.yml/badge.svg)](https://github.com/ChromiteExabyte/WeBalanceBored/actions/workflows/ci.yml)
+
 A Wii Balance Board → Steam Input bridge for Windows. Built as a Rust workspace
 so the protocol parsing and calibration math are reusable by other Balance
 Board projects, not locked inside this app.
