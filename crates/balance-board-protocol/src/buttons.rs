@@ -67,27 +67,60 @@ impl WiimoteButtons {
     // Balance Board's bit if your firmware is unusual.
 
     /// Wiimote D-pad Left (`0x0001`).
-    #[must_use] pub const fn dpad_left(self)  -> bool { self.raw & 0x0001 != 0 }
+    #[must_use]
+    pub const fn dpad_left(self) -> bool {
+        self.raw & 0x0001 != 0
+    }
     /// Wiimote D-pad Right (`0x0002`).
-    #[must_use] pub const fn dpad_right(self) -> bool { self.raw & 0x0002 != 0 }
+    #[must_use]
+    pub const fn dpad_right(self) -> bool {
+        self.raw & 0x0002 != 0
+    }
     /// Wiimote D-pad Down (`0x0004`).
-    #[must_use] pub const fn dpad_down(self)  -> bool { self.raw & 0x0004 != 0 }
+    #[must_use]
+    pub const fn dpad_down(self) -> bool {
+        self.raw & 0x0004 != 0
+    }
     /// Wiimote D-pad Up (`0x0008`).
-    #[must_use] pub const fn dpad_up(self)    -> bool { self.raw & 0x0008 != 0 }
+    #[must_use]
+    pub const fn dpad_up(self) -> bool {
+        self.raw & 0x0008 != 0
+    }
     /// Wiimote Plus (`0x0010`).
-    #[must_use] pub const fn plus(self)       -> bool { self.raw & 0x0010 != 0 }
+    #[must_use]
+    pub const fn plus(self) -> bool {
+        self.raw & 0x0010 != 0
+    }
     /// Wiimote 2 (`0x0100`).
-    #[must_use] pub const fn two(self)        -> bool { self.raw & 0x0100 != 0 }
+    #[must_use]
+    pub const fn two(self) -> bool {
+        self.raw & 0x0100 != 0
+    }
     /// Wiimote 1 (`0x0200`).
-    #[must_use] pub const fn one(self)        -> bool { self.raw & 0x0200 != 0 }
+    #[must_use]
+    pub const fn one(self) -> bool {
+        self.raw & 0x0200 != 0
+    }
     /// Wiimote B (`0x0400`).
-    #[must_use] pub const fn b(self)          -> bool { self.raw & 0x0400 != 0 }
+    #[must_use]
+    pub const fn b(self) -> bool {
+        self.raw & 0x0400 != 0
+    }
     /// Wiimote A (`0x0800`).
-    #[must_use] pub const fn a(self)          -> bool { self.raw & 0x0800 != 0 }
+    #[must_use]
+    pub const fn a(self) -> bool {
+        self.raw & 0x0800 != 0
+    }
     /// Wiimote Minus (`0x1000`).
-    #[must_use] pub const fn minus(self)      -> bool { self.raw & 0x1000 != 0 }
+    #[must_use]
+    pub const fn minus(self) -> bool {
+        self.raw & 0x1000 != 0
+    }
     /// Wiimote Home (`0x8000`).
-    #[must_use] pub const fn home(self)       -> bool { self.raw & 0x8000 != 0 }
+    #[must_use]
+    pub const fn home(self) -> bool {
+        self.raw & 0x8000 != 0
+    }
 }
 
 #[cfg(test)]

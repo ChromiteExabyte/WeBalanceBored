@@ -22,7 +22,9 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParseError::EmptyReport => f.write_str("HID report buffer was empty"),
-            ParseError::UnsupportedReportId(id) => write!(f, "unsupported HID report id: 0x{id:02x}"),
+            ParseError::UnsupportedReportId(id) => {
+                write!(f, "unsupported HID report id: 0x{id:02x}")
+            }
             ParseError::TruncatedReport { expected, got } => write!(
                 f,
                 "HID report truncated: expected at least {expected} bytes, got {got}"

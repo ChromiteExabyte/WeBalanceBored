@@ -30,9 +30,7 @@ pub fn user_cache_dir() -> Option<PathBuf> {
     }
     #[cfg(not(windows))]
     {
-        std::env::var_os("HOME").map(|p| {
-            PathBuf::from(p).join(".config").join("we-balance-bored")
-        })
+        std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".config").join("we-balance-bored"))
     }
 }
 

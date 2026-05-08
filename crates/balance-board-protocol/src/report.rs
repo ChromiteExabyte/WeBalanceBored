@@ -71,10 +71,10 @@ impl ReportId {
 #[must_use]
 pub fn parse_report_extension(ext: &[u8; 8]) -> RawSensors {
     RawSensors {
-        top_right:    u16::from_be_bytes([ext[0], ext[1]]),
+        top_right: u16::from_be_bytes([ext[0], ext[1]]),
         bottom_right: u16::from_be_bytes([ext[2], ext[3]]),
-        top_left:     u16::from_be_bytes([ext[4], ext[5]]),
-        bottom_left:  u16::from_be_bytes([ext[6], ext[7]]),
+        top_left: u16::from_be_bytes([ext[4], ext[5]]),
+        bottom_left: u16::from_be_bytes([ext[6], ext[7]]),
     }
 }
 
@@ -156,7 +156,10 @@ mod tests {
     #[test]
     fn rejects_unknown_report_id() {
         let report = [0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        assert_eq!(parse_report(&report), Err(ParseError::UnsupportedReportId(0xFF)));
+        assert_eq!(
+            parse_report(&report),
+            Err(ParseError::UnsupportedReportId(0xFF))
+        );
     }
 
     #[test]
@@ -164,7 +167,10 @@ mod tests {
         let report = [0x32, 0x00, 0x00, 0x10, 0x00]; // missing 6 ext bytes
         assert_eq!(
             parse_report(&report),
-            Err(ParseError::TruncatedReport { expected: 11, got: 5 })
+            Err(ParseError::TruncatedReport {
+                expected: 11,
+                got: 5
+            })
         );
     }
 }

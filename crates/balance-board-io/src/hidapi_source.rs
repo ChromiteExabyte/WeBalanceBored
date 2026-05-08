@@ -81,8 +81,7 @@ impl HidApiBoard {
         let candidates: Vec<&hidapi::DeviceInfo> = api
             .device_list()
             .filter(|info| {
-                info.vendor_id() == NINTENDO_VID
-                    && BALANCE_BOARD_PIDS.contains(&info.product_id())
+                info.vendor_id() == NINTENDO_VID && BALANCE_BOARD_PIDS.contains(&info.product_id())
             })
             .collect();
 
@@ -199,10 +198,7 @@ impl HidApiBoard {
                     "no register-read response within 2s",
                 ));
             }
-            let n = self
-                .device
-                .read_timeout(&mut report, 250)
-                .map_err(io_err)?;
+            let n = self.device.read_timeout(&mut report, 250).map_err(io_err)?;
             if n == 0 {
                 continue;
             }

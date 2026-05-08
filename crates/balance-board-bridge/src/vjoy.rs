@@ -35,9 +35,9 @@ const AXIS_MAX: i32 = 0x8000;
 #[derive(Debug, Clone, Copy)]
 #[allow(missing_docs)]
 pub enum VJoyAxis {
-    X  = HID_USAGE_X,
-    Y  = HID_USAGE_Y,
-    Z  = HID_USAGE_Z,
+    X = HID_USAGE_X,
+    Y = HID_USAGE_Y,
+    Z = HID_USAGE_Z,
     Rx = HID_USAGE_RX,
     Ry = HID_USAGE_RY,
     Rz = HID_USAGE_RZ,
@@ -57,12 +57,12 @@ extern "system" {
 
 // --- vJoyInterface entry-point signatures -------------------------------
 
-type FnVJoyEnabled    = unsafe extern "system" fn() -> i32;
-type FnAcquireVJD     = unsafe extern "system" fn(rid: u32) -> i32;
-type FnRelinquishVJD  = unsafe extern "system" fn(rid: u32);
-type FnResetVJD       = unsafe extern "system" fn(rid: u32) -> i32;
-type FnSetAxis        = unsafe extern "system" fn(value: i32, rid: u32, axis: u32) -> i32;
-type FnSetBtn         = unsafe extern "system" fn(value: i32, rid: u32, btn: u8) -> i32;
+type FnVJoyEnabled = unsafe extern "system" fn() -> i32;
+type FnAcquireVJD = unsafe extern "system" fn(rid: u32) -> i32;
+type FnRelinquishVJD = unsafe extern "system" fn(rid: u32);
+type FnResetVJD = unsafe extern "system" fn(rid: u32) -> i32;
+type FnSetAxis = unsafe extern "system" fn(value: i32, rid: u32, axis: u32) -> i32;
+type FnSetBtn = unsafe extern "system" fn(value: i32, rid: u32, btn: u8) -> i32;
 
 struct VJoyApi {
     module: Hmodule,
@@ -114,12 +114,12 @@ impl VJoyApi {
         unsafe {
             Ok(VJoyApi {
                 module,
-                enabled:    mem::transmute::<Farproc, FnVJoyEnabled>(resolve("vJoyEnabled")?),
-                acquire:    mem::transmute::<Farproc, FnAcquireVJD>(resolve("AcquireVJD")?),
+                enabled: mem::transmute::<Farproc, FnVJoyEnabled>(resolve("vJoyEnabled")?),
+                acquire: mem::transmute::<Farproc, FnAcquireVJD>(resolve("AcquireVJD")?),
                 relinquish: mem::transmute::<Farproc, FnRelinquishVJD>(resolve("RelinquishVJD")?),
-                reset:      mem::transmute::<Farproc, FnResetVJD>(resolve("ResetVJD")?),
-                set_axis:   mem::transmute::<Farproc, FnSetAxis>(resolve("SetAxis")?),
-                set_btn:    mem::transmute::<Farproc, FnSetBtn>(resolve("SetBtn")?),
+                reset: mem::transmute::<Farproc, FnResetVJD>(resolve("ResetVJD")?),
+                set_axis: mem::transmute::<Farproc, FnSetAxis>(resolve("SetAxis")?),
+                set_btn: mem::transmute::<Farproc, FnSetBtn>(resolve("SetBtn")?),
             })
         }
     }

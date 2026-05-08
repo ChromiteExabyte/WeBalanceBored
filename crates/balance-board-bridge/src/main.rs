@@ -58,7 +58,11 @@ struct Args {
 
 impl Args {
     fn from_env() -> Self {
-        let mut args = Args { no_tare: false, no_smooth: false, no_cache: false };
+        let mut args = Args {
+            no_tare: false,
+            no_smooth: false,
+            no_cache: false,
+        };
         for a in std::env::args().skip(1) {
             match a.as_str() {
                 "--no-tare" => args.no_tare = true,
@@ -128,7 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             vjoy.set_axis_normalized(VJoyAxis::X, processed.cog_x);
             vjoy.set_axis_normalized(VJoyAxis::Y, processed.cog_y);
-            vjoy.set_axis_normalized(VJoyAxis::Z,  processed.corner_axes[0]);
+            vjoy.set_axis_normalized(VJoyAxis::Z, processed.corner_axes[0]);
             vjoy.set_axis_normalized(VJoyAxis::Rx, processed.corner_axes[1]);
             vjoy.set_axis_normalized(VJoyAxis::Ry, processed.corner_axes[2]);
             vjoy.set_axis_normalized(VJoyAxis::Rz, processed.corner_axes[3]);
@@ -139,7 +143,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         #[cfg(not(windows))]
         {
-            let tag = if processed.cog_loaded { "" } else { " (unloaded)" };
+            let tag = if processed.cog_loaded {
+                ""
+            } else {
+                " (unloaded)"
+            };
             let btn = if processed.button { " btn" } else { "" };
             println!(
                 "kg={:.1} x={:+.2} y={:+.2}{tag}{btn}",
@@ -304,8 +312,17 @@ mod tests {
     /// 15000 at 34kg — same shape the protocol crate's tests use, easy to
     /// reason about in head math.
     fn uniform_cal() -> Calibration {
-        let pt = |v| SensorQuad { top_right: v, bottom_right: v, top_left: v, bottom_left: v };
-        Calibration { kg0: pt(5000), kg17: pt(10000), kg34: pt(15000) }
+        let pt = |v| SensorQuad {
+            top_right: v,
+            bottom_right: v,
+            top_left: v,
+            bottom_left: v,
+        };
+        Calibration {
+            kg0: pt(5000),
+            kg17: pt(10000),
+            kg34: pt(15000),
+        }
     }
 
     fn report(tr: u16, br: u16, tl: u16, bl: u16, button: bool) -> BoardReport {

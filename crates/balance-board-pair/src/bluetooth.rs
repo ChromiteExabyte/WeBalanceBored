@@ -275,10 +275,10 @@ fn authenticate(info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
     // SAFETY: `info` is initialized.
     let auth_rc = unsafe {
         BluetoothAuthenticateDeviceEx(
-            ptr::null_mut(),                   // hwndParent — none
-            ptr::null_mut(),                   // hRadio — any
+            ptr::null_mut(), // hwndParent — none
+            ptr::null_mut(), // hRadio — any
             info,
-            ptr::null_mut(),                   // OOB data — none
+            ptr::null_mut(), // OOB data — none
             MITMProtectionNotRequired,
         )
     };
@@ -306,12 +306,7 @@ fn enable_hid_service(info: &BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
     // SAFETY: GUID is fully initialized; info is initialized; the
     // function takes them by-pointer for read.
     let rc = unsafe {
-        BluetoothSetServiceState(
-            ptr::null_mut(),
-            info,
-            &hid_guid,
-            BLUETOOTH_SERVICE_ENABLE,
-        )
+        BluetoothSetServiceState(ptr::null_mut(), info, &hid_guid, BLUETOOTH_SERVICE_ENABLE)
     };
     if rc != ERROR_SUCCESS {
         return Err(io::Error::from_raw_os_error(rc as i32));

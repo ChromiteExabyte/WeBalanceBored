@@ -29,7 +29,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let kg = cal.calibrate(report.sensors);
         let total = kg.total_kg();
         let cog = kg.center_of_gravity(2.0);
-        let btn = if report.buttons.balance_board_button() { "DOWN" } else { "" };
+        let btn = if report.buttons.balance_board_button() {
+            "DOWN"
+        } else {
+            ""
+        };
         match cog {
             Some(c) => println!(
                 "{total:>8.2} | {:>6.2} {:>6.2} {:>6.2} {:>6.2} | {:>+6.3} {:>+6.3} | {btn}",

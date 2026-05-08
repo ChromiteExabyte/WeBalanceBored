@@ -40,10 +40,7 @@ impl LowPass2D {
     pub fn update(&mut self, x: f32, y: f32) -> (f32, f32) {
         let next = match self.state {
             None => (x, y),
-            Some((px, py)) => (
-                px + (x - px) * self.alpha,
-                py + (y - py) * self.alpha,
-            ),
+            Some((px, py)) => (px + (x - px) * self.alpha, py + (y - py) * self.alpha),
         };
         self.state = Some(next);
         next
