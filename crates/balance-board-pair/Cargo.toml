@@ -1,0 +1,19 @@
+[package]
+name = "balance-board-pair"
+version = "0.1.0"
+description = "Auto-pair tool for the Wii Balance Board on Windows. Avoids fighting the Bluetooth wizard's PIN prompt."
+license = "GPL-3.0-or-later"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Devices_Bluetooth",
+    "Win32_Foundation",
+] }
+
+[lints.rust]
+missing_docs = "warn"

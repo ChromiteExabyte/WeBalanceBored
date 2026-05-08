@@ -19,6 +19,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "balance-board-pair"
+version = "0.1.0"
+dependencies = [
+ "windows-sys",
+]
+
+[[package]]
 name = "balance-board-protocol"
 version = "0.1.0"
 

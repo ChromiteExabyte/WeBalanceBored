@@ -4,6 +4,7 @@ members = [
     "crates/balance-board-protocol",
     "crates/balance-board-io",
     "crates/balance-board-bridge",
+    "crates/balance-board-pair",
 ]
 
 [workspace.package]
