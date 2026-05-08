@@ -51,6 +51,7 @@ cargo run --release -p balance-board-bridge                    # full bridge (bo
 
 1. Play Superflight (and other Steam games) using a Wii Balance Board, via
    the path `Balance Board → Bluetooth HID → vJoy → Steam Input → game`.
+   Step-by-step guide: [docs/steam-input/superflight.md](docs/steam-input/superflight.md).
 2. Provide a clean, documented Rust crate that other Balance Board projects
    can depend on for parsing, calibration, and center-of-gravity math.
 
