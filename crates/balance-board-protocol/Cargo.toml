@@ -1,0 +1,16 @@
+[package]
+name = "balance-board-protocol"
+version = "0.1.0"
+description = "Pure parsing, calibration, and center-of-gravity math for the Nintendo Wii Balance Board. No I/O."
+license = "MPL-2.0"
+keywords = ["wii", "balance-board", "wiimote", "hid", "input"]
+categories = ["hardware-support", "parser-implementations"]
+readme = "README.md"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"

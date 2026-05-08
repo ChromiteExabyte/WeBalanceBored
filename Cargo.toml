@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/balance-board-protocol",
+    "crates/balance-board-io",
+    "crates/balance-board-bridge",
+]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.75"
+authors = ["Carter"]
+repository = "https://github.com/ChromiteExabyte/WeBalanceBored"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

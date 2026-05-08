@@ -1,0 +1,14 @@
+[package]
+name = "balance-board-bridge"
+version = "0.1.0"
+description = "Wii Balance Board → vJoy bridge for Steam Input. Lets you play Steam games using a Balance Board."
+license = "GPL-3.0-or-later"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+balance-board-protocol = { path = "../balance-board-protocol", version = "0.1.0" }
+balance-board-io       = { path = "../balance-board-io",       version = "0.1.0" }
