@@ -21,6 +21,13 @@
 //! and provide a [`balance_board_button`](WiimoteButtons::balance_board_button)
 //! convenience that returns the OR of every bit so callers don't have
 //! to care about the exact firmware mapping.
+//!
+//! # References
+//!
+//! - WiiBrew Wiimote — Core Buttons section:
+//!   <https://wiibrew.org/wiki/Wiimote#Core_Buttons>
+//! - Cross-checked against jloehr/HID-Wiimote (Windows kernel driver,
+//!   hardware-tested in production).
 
 /// Decoded Wiimote button state from a single core-buttons report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

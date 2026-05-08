@@ -5,6 +5,11 @@
 //! extension registers `0xa40024..=0xa4003b` (24 bytes): the raw value each
 //! sensor produces under known loads of 0 kg, 17 kg, and 34 kg. We linearly
 //! interpolate between these to recover physical units.
+//!
+//! # References
+//!
+//! - WiiBrew Wii Balance Board — Calibration Data:
+//!   <https://wiibrew.org/wiki/Wii_Balance_Board#Calibration_Data>
 
 use crate::cog::CenterOfGravity;
 use crate::error::CalibrationError;

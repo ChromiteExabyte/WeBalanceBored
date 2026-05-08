@@ -4,6 +4,13 @@
 //! Wiimote HID report stream. Different report IDs put the 8-byte extension
 //! payload at different offsets; this module translates a few common ones
 //! into [`RawSensors`].
+//!
+//! # References
+//!
+//! - WiiBrew Wiimote — Data Reporting Modes (0x32, 0x34, etc.):
+//!   <https://wiibrew.org/wiki/Wiimote#Data_Reporting>
+//! - WiiBrew Wii Balance Board — extension payload layout:
+//!   <https://wiibrew.org/wiki/Wii_Balance_Board#Data_Format>
 
 use crate::buttons::WiimoteButtons;
 use crate::error::ParseError;

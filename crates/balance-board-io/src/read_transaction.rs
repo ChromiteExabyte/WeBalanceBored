@@ -4,6 +4,12 @@
 //! board fragments the response into 16-byte chunks, each carrying its own
 //! source address. This module pieces the chunks back together, tolerant of
 //! ordering and of sensor reports interleaving on the same HID stream.
+//!
+//! # References
+//!
+//! - WiiBrew Wiimote — Read Memory and Registers (`0x17` request, `0x21`
+//!   response): <https://wiibrew.org/wiki/Wiimote#Reading_and_Writing>
+//! - Cross-checked against jloehr/HID-Wiimote's `ProcessRegisterReadReport`.
 
 use std::io;
 

@@ -92,4 +92,23 @@ If you're new and looking for somewhere to dig in:
 - **Architectural questions** → check the per-crate `lib.rs` doc
   comment first; each crate states its design intent.
 
+## Protocol references
+
+If you're touching anything in `balance-board-protocol`, these are the
+authoritative sources we follow. Citations live in the doc comments on
+the affected modules; if you change a protocol claim and the citation
+no longer holds, please update or replace the citation in the same PR.
+
+- **WiiBrew — Wii Balance Board**: <https://wiibrew.org/wiki/Wii_Balance_Board>
+  (sensor order, calibration block, data format).
+- **WiiBrew — Wiimote**: <https://wiibrew.org/wiki/Wiimote>
+  (HID report IDs, button layout, register read/write commands and `0x21`
+  responses).
+- **WiiBrew — Wiimote/Extension_Controllers**: <https://wiibrew.org/wiki/Wiimote/Extension_Controllers>
+  (extension encryption, the "new init" sequence we use).
+- **[jloehr/HID-Wiimote](https://github.com/jloehr/HID-Wiimote)**: a Windows
+  kernel driver, hardware-tested in production. We don't depend on it,
+  but we cross-check protocol details against its source where WiiBrew is
+  ambiguous.
+
 Thanks for being here.

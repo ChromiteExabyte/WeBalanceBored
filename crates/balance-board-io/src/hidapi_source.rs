@@ -142,10 +142,19 @@ impl HidApiBoard {
     }
 
     fn disable_extension_encryption(&mut self) -> io::Result<()> {
-        // Writing 0x55 to register 0xa400f0 disables encryption on the
-        // extension. The follow-up write to 0xa400fb is part of the
-        // documented init dance for some firmwares; some boards return
-        // an error here and ignoring it is safe.
+        // The two-write "new init" sequence — works on every Wiimote and
+        // Balance Board firmware including the post-TR generation.
+        //
+        // - Write 0x55 to register 0xA400F0  → disable extension encryption.
+        // - Write 0x00 to register 0xA400FB  → finish the init handshake.
+        //
+        // The second write returns an error on some firmwares; ignoring it
+        // is safe and matches what jloehr/HID-Wiimote does.
+        //
+        // References:
+        // - WiiBrew Wiimote/Extension_Controllers § "The New Way":
+        //   https://wiibrew.org/wiki/Wiimote/Extension_Controllers#The_New_Way
+        // - jloehr/HID-Wiimote Wiimote.c — same byte sequence.
         self.write_register(0x00A4_00F0, &[0x55])?;
         let _ = self.write_register(0x00A4_00FB, &[0x00]);
         Ok(())
