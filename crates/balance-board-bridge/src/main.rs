@@ -22,6 +22,8 @@
 use balance_board_io::{BalanceBoardSource, HidApiBoard};
 use balance_board_protocol::{Calibration, LowPass2D};
 
+mod cache;
+
 #[cfg(windows)]
 mod vjoy;
 
@@ -51,20 +53,28 @@ const COG_ALPHA: f32 = 0.4;
 struct Args {
     no_tare: bool,
     no_smooth: bool,
+    no_cache: bool,
 }
 
 impl Args {
     fn from_env() -> Self {
-        let mut args = Args { no_tare: false, no_smooth: false };
+        let mut args = Args { no_tare: false, no_smooth: false, no_cache: false };
         for a in std::env::args().skip(1) {
             match a.as_str() {
                 "--no-tare" => args.no_tare = true,
                 "--no-smooth" => args.no_smooth = true,
+                "--no-cache" => args.no_cache = true,
                 "-h" | "--help" => {
                     eprintln!(
-                        "Usage: balance-board-bridge [--no-tare] [--no-smooth]\n\n\
+                        "Usage: balance-board-bridge [--no-tare] [--no-smooth] [--no-cache]\n\n\
                          --no-tare    Skip the warm-up that calibrates a centered stance.\n\
-                         --no-smooth  Disable the low-pass filter (raw COG to vJoy)."
+                         --no-smooth  Disable the low-pass filter (raw COG to vJoy).\n\
+                         --no-cache   Re-read calibration from the board, ignore the on-disk cache.\n\
+                         \n\
+                         Cache location: {}",
+                        cache::user_cache_dir()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_else(|| "(no user-config dir on this platform)".into()),
                     );
                     std::process::exit(0);
                 }
@@ -84,8 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("WeBalanceBored — opening Balance Board...");
     let mut board = HidApiBoard::open()?;
 
-    eprintln!("Reading calibration...");
-    let cal_bytes = board.read_calibration_block()?;
+    let cal_bytes = load_or_read_calibration(&mut board, args.no_cache)?;
     let cal = Calibration::from_eeprom(&cal_bytes)?;
 
     #[cfg(windows)]
@@ -144,6 +153,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("kg={:.1} x={x:+.2} y={y:+.2}{tag}", kg.total_kg());
         }
     }
+}
+
+/// Try the on-disk cache first; on miss, corrupt cache, or
+/// `--no-cache`, do the live EEPROM read and update the cache.
+fn load_or_read_calibration(
+    board: &mut HidApiBoard,
+    no_cache: bool,
+) -> Result<[u8; 24], Box<dyn std::error::Error>> {
+    let cache_dir = cache::user_cache_dir();
+
+    if !no_cache {
+        if let Some(dir) = cache_dir.as_deref() {
+            if let Some(bytes) = cache::load_from(dir) {
+                // Sanity-check: a stale/corrupt cache shouldn't silently
+                // produce wrong calibration. Validate via the protocol
+                // crate's monotonicity check before trusting.
+                if Calibration::from_eeprom(&bytes).is_ok() {
+                    eprintln!("Calibration loaded from cache ({}).", dir.display());
+                    return Ok(bytes);
+                }
+                eprintln!("Cached calibration failed validation; re-reading from board.");
+            }
+        }
+    }
+
+    eprintln!("Reading calibration from board...");
+    let bytes = board.read_calibration_block()?;
+
+    if let Some(dir) = cache_dir.as_deref() {
+        match cache::save_to(dir, &bytes) {
+            Ok(()) => eprintln!("Cached calibration to {}.", dir.display()),
+            Err(e) => eprintln!("Could not write calibration cache: {e}"),
+        }
+    }
+
+    Ok(bytes)
 }
 
 /// Block until the board is loaded, then average COG over
