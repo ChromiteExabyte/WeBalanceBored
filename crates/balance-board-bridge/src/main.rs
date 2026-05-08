@@ -50,10 +50,14 @@ const TARE_FRAMES: usize = 100;
 /// lower = smoother. 0.4 at 100 Hz reaches ~95% of a step in ~50 ms.
 const COG_ALPHA: f32 = 0.4;
 
+/// Print a verbose status line every N frames. ~100 Hz reports → 1 s.
+const VERBOSE_EVERY_FRAMES: u64 = 100;
+
 struct Args {
     no_tare: bool,
     no_smooth: bool,
     no_cache: bool,
+    verbose: bool,
 }
 
 impl Args {
@@ -62,18 +66,21 @@ impl Args {
             no_tare: false,
             no_smooth: false,
             no_cache: false,
+            verbose: false,
         };
         for a in std::env::args().skip(1) {
             match a.as_str() {
                 "--no-tare" => args.no_tare = true,
                 "--no-smooth" => args.no_smooth = true,
                 "--no-cache" => args.no_cache = true,
+                "-v" | "--verbose" => args.verbose = true,
                 "-h" | "--help" => {
                     eprintln!(
-                        "Usage: balance-board-bridge [--no-tare] [--no-smooth] [--no-cache]\n\n\
-                         --no-tare    Skip the warm-up that calibrates a centered stance.\n\
-                         --no-smooth  Disable the low-pass filter (raw COG to vJoy).\n\
-                         --no-cache   Re-read calibration from the board, ignore the on-disk cache.\n\
+                        "Usage: balance-board-bridge [--no-tare] [--no-smooth] [--no-cache] [--verbose]\n\n\
+                         --no-tare       Skip the warm-up that calibrates a centered stance.\n\
+                         --no-smooth     Disable the low-pass filter (raw COG to vJoy).\n\
+                         --no-cache      Re-read calibration from the board, ignore the on-disk cache.\n\
+                         -v, --verbose   Print a status line every ~1 s while streaming.\n\
                          \n\
                          Cache location: {}",
                         cache::user_cache_dir()
@@ -124,9 +131,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut filter = LowPass2D::new(alpha);
 
     eprintln!("\nStreaming. Ctrl-C to stop.");
+    let mut frame: u64 = 0;
     loop {
         let report = board.next_report()?;
         let processed = process_report(&report, &cal, (tare_x, tare_y), &mut filter);
+        frame = frame.wrapping_add(1);
+
+        if args.verbose && frame % VERBOSE_EVERY_FRAMES == 0 {
+            eprintln!(
+                "kg={:>5.1}  cog=({:+.2},{:+.2})  btn={}",
+                processed.total_kg,
+                processed.cog_x,
+                processed.cog_y,
+                if processed.button { "DOWN" } else { "  up" },
+            );
+        }
 
         #[cfg(windows)]
         {
