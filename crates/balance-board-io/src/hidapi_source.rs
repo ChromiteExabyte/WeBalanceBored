@@ -205,5 +205,5 @@ impl BalanceBoardSource for HidApiBoard {
 }
 
 fn io_err<E: std::fmt::Display>(e: E) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, e.to_string())
+    io::Error::other(e.to_string())
 }

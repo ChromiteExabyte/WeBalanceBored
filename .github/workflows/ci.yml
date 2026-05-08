@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Validates that the protocol crate is genuinely portable. It has no
+  # platform deps and no I/O — if this job ever fails on linux while the
+  # windows job is green, something has leaked into the wrong layer.
+  protocol-portable:
+    name: protocol crate (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: protocol
+      - name: cargo test
+        run: cargo test -p balance-board-protocol
+      - name: cargo clippy
+        run: cargo clippy -p balance-board-protocol --all-targets -- -D warnings
+
+  # Builds and tests the entire workspace on the real target platform.
+  # Catches hidapi build-script issues, raw-dylib resolution, anything
+  # MSVC-specific.
+  workspace-windows:
+    name: full workspace (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+      - name: cargo build
+        run: cargo build --workspace --all-targets
+      - name: cargo test
+        run: cargo test --workspace
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings

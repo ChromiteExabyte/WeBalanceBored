@@ -60,10 +60,9 @@ impl ReadTransaction {
         let err = err_size >> 4;
         let size = (err_size & 0x0F) as usize + 1;
         if err != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Wiimote register-read error code 0x{err:x}"),
-            ));
+            return Err(io::Error::other(format!(
+                "Wiimote register-read error code 0x{err:x}"
+            )));
         }
         let frame_addr_low = u16::from_be_bytes([frame[4], frame[5]]) as u32;
         let base_low = self.base_addr & 0xFFFF;

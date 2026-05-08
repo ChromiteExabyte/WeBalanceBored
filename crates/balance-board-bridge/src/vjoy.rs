@@ -165,10 +165,9 @@ impl VJoyDevice {
                 ));
             }
             if (api.acquire)(id) == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("could not acquire vJoy device {id} — already in use, or not configured"),
-                ));
+                return Err(io::Error::other(format!(
+                    "could not acquire vJoy device {id} — already in use, or not configured"
+                )));
             }
             (api.reset)(id);
         }
