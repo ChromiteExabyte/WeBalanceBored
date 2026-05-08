@@ -59,26 +59,66 @@ impl HidApiBoard {
     /// # Errors
     /// - [`io::ErrorKind::NotFound`] if no Balance Board is paired.
     /// - [`io::ErrorKind::Other`] for any underlying hidapi error.
+    ///
+    /// # Discovery heuristic
+    ///
+    /// On most platforms a Balance Board reports product string
+    /// `Nintendo RVL-WBC-01`, so we prefer that. But on Windows after a
+    /// Bluetooth pairing, hidapi often only exposes the HID *child*
+    /// object whose product string is generic (e.g. `HID-compliant game
+    /// controller`); the friendly Bluetooth-level name is only on the
+    /// parent. To handle that, we fall back to matching by VID + PID
+    /// alone (Nintendo `0x057E`, PID `0x0306` — same as a Wiimote).
+    ///
+    /// Edge case: if you have a Wiimote and a Balance Board paired at
+    /// the same time and neither exposes a distinguishing product
+    /// string, the first match wins, which may be wrong. In that case
+    /// run the `list_hid_devices` example to see all candidates and
+    /// open the right one explicitly via [`open_path`](Self::open_path).
     pub fn open() -> io::Result<Self> {
         let api = HidApi::new().map_err(io_err)?;
-        let path = api
+
+        let candidates: Vec<&hidapi::DeviceInfo> = api
             .device_list()
-            .find(|info| {
+            .filter(|info| {
                 info.vendor_id() == NINTENDO_VID
                     && BALANCE_BOARD_PIDS.contains(&info.product_id())
-                    && info
-                        .product_string()
-                        .map(|s| s.contains("RVL-WBC-01"))
-                        .unwrap_or(false)
             })
-            .map(|info| info.path().to_owned())
+            .collect();
+
+        let chosen = candidates
+            .iter()
+            .copied()
+            .find(|info| {
+                info.product_string()
+                    .map(|s| s.contains("RVL-WBC-01"))
+                    .unwrap_or(false)
+            })
+            .or_else(|| candidates.first().copied())
             .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "No Balance Board found. Pair `Nintendo RVL-WBC-01` via your OS Bluetooth UI first.",
-                )
+                io::Error::other(format!(
+                    "No Balance Board found via hidapi (looking for VID=0x{NINTENDO_VID:04X}, \
+                     PID one of {BALANCE_BOARD_PIDS:#06x?}).\n\n\
+                     If Windows shows `Nintendo RVL-WBC-01` under Bluetooth Settings but this \
+                     binary still can't see it, the board's HID child may have a generic \
+                     product string. Run the `list_hid_devices` example to see what hidapi \
+                     reports on this machine:\n  \
+                     cargo run -p balance-board-io --example list_hid_devices\n\n\
+                     If the board isn't paired yet, pair `Nintendo RVL-WBC-01` via Windows \
+                     Bluetooth Settings first."
+                ))
             })?;
 
+        if candidates.len() > 1 {
+            eprintln!(
+                "warning: {} devices match Nintendo VID+PID; picking first ({:?}). \
+                 Use `list_hid_devices` + open_path() if this is wrong.",
+                candidates.len(),
+                chosen.path(),
+            );
+        }
+
+        let path = chosen.path().to_owned();
         let device = api.open_path(&path).map_err(io_err)?;
         device.set_blocking_mode(true).map_err(io_err)?;
 
