@@ -324,11 +324,21 @@ unsafe extern "system" fn auth_callback(
 }
 
 fn authenticate(radio: &LocalRadio, info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
-    // The Wii's SYNC-button pairing PIN is the **host** PC's Bluetooth
-    // radio MAC, not the device's own MAC. (For "1+2 button hold"
-    // pairing on a Wiimote it'd be the wiimote's own MAC; the Balance
-    // Board only does SYNC pairing.)
-    let pin = wii_pin_for_address(radio.address);
+    // PIN derivation: empirically the board's own MAC reversed works
+    // for SYNC-button pairing on real hardware (this disagrees with
+    // some WiiBrew text, agrees with the original WiiBalanceWalker,
+    // and confirmed by Carter's hardware test). Using `radio.address`
+    // (the host PC's MAC) caused the BluetoothSendAuthenticationResponseEx
+    // call to hang — Windows accepted the parameters but the device
+    // never acknowledged the PIN.
+    //
+    // SAFETY: rgBytes alias of the address union.
+    let device_address = unsafe { info.Address.Anonymous.rgBytes };
+    let pin = wii_pin_for_address(device_address);
+    eprintln!(
+        "[pair] PIN to send: {} (device's own MAC reversed)",
+        crate::pin::format_pin(pin)
+    );
 
     // Box and leak the context for the duration of registration; we
     // reclaim it after unregistering, below.

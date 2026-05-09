@@ -23,21 +23,22 @@ pub const WII_PIN_LEN: usize = 6;
 
 /// Compute the binary PIN to send when pairing with a Wii device.
 ///
-/// **Which address you pass in matters.** Per WiiBrew's Wiimote page:
+/// Per WiiBrew + the original WiiBalanceWalker + hardware testing:
+/// the PIN is the **device's own** Bluetooth address (Wiimote or
+/// Balance Board), in Win32 rgBytes order (little-endian, equivalent
+/// to "BD_ADDR reversed" if you read addresses big-endian like
+/// most Bluetooth UIs do).
 ///
-/// - **SYNC-button pairing** (red button under the Balance Board's
-///   battery cover, or the SYNC button on the back of a Wii Remote):
-///   pass the **host PC's** Bluetooth radio rgBytes. The device
-///   accepts the master's address as the PIN.
-/// - **"1 + 2" button-hold pairing** (Wiimote only): pass the
-///   **wiimote's own** rgBytes.
-///
-/// The Balance Board only does SYNC-button pairing, so for our use
-/// case the input is always the local Bluetooth radio's address.
+/// (Older WiiBrew text suggests the host MAC for SYNC pairing.
+/// On Carter's Windows machine that caused
+/// `BluetoothSendAuthenticationResponseEx` to hang waiting for a
+/// device acknowledgment that never came; switching to the device's
+/// own MAC matches what the original 32feet.NET-based WiiBalanceWalker
+/// did and what other Wii pairing tools use.)
 ///
 /// Input: a Bluetooth address as exposed by Win32
-/// (`BLUETOOTH_ADDRESS.Anonymous.rgBytes`), which is already in
-/// little-endian / "reversed" order.
+/// (`BLUETOOTH_ADDRESS.Anonymous.rgBytes`), already in little-endian
+/// byte order.
 ///
 /// Output: 6 bytes ready to feed straight into
 /// `BLUETOOTH_AUTHENTICATE_RESPONSE.pinInfo.pin[..6]`.
