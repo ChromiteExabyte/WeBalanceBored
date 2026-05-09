@@ -143,19 +143,86 @@ pub fn pair_first(timeout: Duration) -> io::Result<PairResult> {
             )
         })?;
 
+    let radio = LocalRadio::open()?;
+    eprintln!(
+        "[pair] local Bluetooth radio MAC: {} (this is the PIN we'll send for SYNC pairing)",
+        crate::pin::format_bd_addr(radio.address)
+    );
+
     let mut info = info_for_address(board.address);
     let already_paired = info.fAuthenticated != 0;
 
     if !already_paired {
-        authenticate(&mut info)?;
+        authenticate(&radio, &mut info)?;
     }
-    enable_hid_service(&info)?;
+    enable_hid_service(&radio, &info)?;
 
     Ok(PairResult {
         address: board.address,
         name: board.name,
         already_paired,
     })
+}
+
+/// RAII handle to the local Bluetooth radio. We need this for two
+/// reasons:
+///
+/// 1. `BluetoothAuthenticateDeviceEx` and `BluetoothSendAuthenticationResponseEx`
+///    work much more reliably with an explicit radio handle than with
+///    `NULL` ("any radio") — passing NULL was producing
+///    `ERROR_GEN_FAILURE` on Carter's setup.
+/// 2. The Wii's SYNC-button pairing protocol uses the **host's**
+///    Bluetooth radio MAC (in rgBytes / little-endian order) as the
+///    PIN, not the device's own MAC. So we need to know our own
+///    radio's address to derive the right PIN.
+struct LocalRadio {
+    handle: HANDLE,
+    address: [u8; 6],
+}
+
+impl LocalRadio {
+    fn open() -> io::Result<Self> {
+        let mut find_params: BLUETOOTH_FIND_RADIO_PARAMS = unsafe { mem::zeroed() };
+        find_params.dwSize = mem::size_of::<BLUETOOTH_FIND_RADIO_PARAMS>() as u32;
+
+        let mut handle: HANDLE = ptr::null_mut();
+        // SAFETY: `find_params` is fully initialized; `handle` is an
+        // out-parameter that will be set on success.
+        let h_find = unsafe { BluetoothFindFirstRadio(&find_params, &mut handle) };
+        if h_find.is_null() {
+            let err = unsafe { GetLastError() };
+            return Err(io::Error::other(format!(
+                "BluetoothFindFirstRadio failed: os error {err}"
+            )));
+        }
+        // We only need the first radio; close the find iterator now.
+        // SAFETY: `h_find` is the live handle from FindFirstRadio.
+        unsafe { BluetoothFindRadioClose(h_find) };
+
+        let mut info: BLUETOOTH_RADIO_INFO = unsafe { mem::zeroed() };
+        info.dwSize = mem::size_of::<BLUETOOTH_RADIO_INFO>() as u32;
+        // SAFETY: `handle` is the live radio handle; `info` has its
+        // dwSize set as required.
+        let rc = unsafe { BluetoothGetRadioInfo(handle, &mut info) };
+        if rc != ERROR_SUCCESS {
+            // SAFETY: `handle` came from FindFirstRadio.
+            unsafe { CloseHandle(handle) };
+            return Err(io::Error::other(format!(
+                "BluetoothGetRadioInfo failed: os error {rc}"
+            )));
+        }
+        // SAFETY: `address.Anonymous.rgBytes` is the 6-byte alternative
+        // view of a valid `BLUETOOTH_ADDRESS` union.
+        let address = unsafe { info.address.Anonymous.rgBytes };
+        Ok(LocalRadio { handle, address })
+    }
+}
+
+impl Drop for LocalRadio {
+    fn drop(&mut self) {
+        // SAFETY: `handle` came from FindFirstRadio and isn't shared.
+        unsafe { CloseHandle(self.handle) };
+    }
 }
 
 /// Unpair every Balance Board currently known to Windows. Returns
@@ -211,6 +278,9 @@ fn info_for_address(address: [u8; 6]) -> BLUETOOTH_DEVICE_INFO {
 /// build the response that includes our binary PIN.
 struct AuthContext {
     pin: [u8; WII_PIN_LEN],
+    /// Radio handle for `BluetoothSendAuthenticationResponseEx`.
+    /// Must be the same radio we registered for auth on.
+    radio_handle: HANDLE,
 }
 
 unsafe extern "system" fn auth_callback(
@@ -244,7 +314,7 @@ unsafe extern "system" fn auth_callback(
 
     // SAFETY: `response` is fully initialized; `BluetoothSendAuthenticationResponseEx`
     // returns a Win32 error code (DWORD = u32).
-    let rc = unsafe { BluetoothSendAuthenticationResponseEx(ptr::null_mut(), &response) };
+    let rc = unsafe { BluetoothSendAuthenticationResponseEx(ctx.radio_handle, &response) };
     eprintln!(
         "[auth_callback] BluetoothSendAuthenticationResponseEx returned {} ({})",
         rc,
@@ -253,14 +323,19 @@ unsafe extern "system" fn auth_callback(
     rc as i32
 }
 
-fn authenticate(info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
-    // SAFETY: rgBytes alias of the address union.
-    let address = unsafe { info.Address.Anonymous.rgBytes };
-    let pin = wii_pin_for_address(address);
+fn authenticate(radio: &LocalRadio, info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
+    // The Wii's SYNC-button pairing PIN is the **host** PC's Bluetooth
+    // radio MAC, not the device's own MAC. (For "1+2 button hold"
+    // pairing on a Wiimote it'd be the wiimote's own MAC; the Balance
+    // Board only does SYNC pairing.)
+    let pin = wii_pin_for_address(radio.address);
 
     // Box and leak the context for the duration of registration; we
     // reclaim it after unregistering, below.
-    let ctx = Box::new(AuthContext { pin });
+    let ctx = Box::new(AuthContext {
+        pin,
+        radio_handle: radio.handle,
+    });
     let ctx_ptr = Box::into_raw(ctx);
 
     // windows-sys 0.61 models the registration handle as a bare `isize`
@@ -292,7 +367,7 @@ fn authenticate(info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
     let auth_rc = unsafe {
         BluetoothAuthenticateDeviceEx(
             ptr::null_mut(), // hwndParent — none
-            ptr::null_mut(), // hRadio — any
+            radio.handle,    // hRadio — explicit local radio
             info,
             ptr::null_mut(),                  // OOB data — none
             MITMProtectionNotRequiredBonding, // request persistent bonding (HID needs it)
@@ -314,7 +389,7 @@ fn authenticate(info: &mut BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
     Ok(())
 }
 
-fn enable_hid_service(info: &BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
+fn enable_hid_service(radio: &LocalRadio, info: &BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
     // GUID for the HID Service Class. From the Bluetooth SIG:
     // {0000_1124-0000-1000-8000-00805F9B34FB}
     let hid_guid = windows_sys::core::GUID {
@@ -326,7 +401,7 @@ fn enable_hid_service(info: &BLUETOOTH_DEVICE_INFO) -> io::Result<()> {
     // SAFETY: GUID is fully initialized; info is initialized; the
     // function takes them by-pointer for read.
     let rc = unsafe {
-        BluetoothSetServiceState(ptr::null_mut(), info, &hid_guid, BLUETOOTH_SERVICE_ENABLE)
+        BluetoothSetServiceState(radio.handle, info, &hid_guid, BLUETOOTH_SERVICE_ENABLE)
     };
     if rc != ERROR_SUCCESS {
         return Err(io::Error::other(format!(
