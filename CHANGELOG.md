@@ -56,3 +56,5 @@ once it leaves the 0.x series.
 ### Not yet hardware-verified
 - The pairing handshake itself (PIN delivery via `BluetoothSendAuthenticationResponseEx`).
 - The full bridge end-to-end pipeline (board → vJoy → Steam Input → game).
+
+<!-- last touched: 2026-05-12 -->
