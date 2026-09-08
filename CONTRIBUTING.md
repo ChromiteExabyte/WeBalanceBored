@@ -8,8 +8,8 @@ this page tells you how.
 ```pwsh
 git clone https://github.com/ChromiteExabyte/WeBalanceBored
 cd WeBalanceBored
-cargo test  --workspace          # all tests, no hardware needed
-cargo build --release --workspace
+cargo test --workspace --locked  # all tests, no hardware needed
+cargo build --release --workspace --locked
 ```
 
 Rust 1.75+ is the floor. On Windows you need the MSVC linker (Visual
@@ -28,7 +28,8 @@ today).
 | `crates/balance-board-bridge/` | The end-user binary. vJoy, tare, smoothing, calibration cache. GPL-3.0-or-later. |
 | `crates/balance-board-pair/` | Windows auto-pair tool. GPL-3.0-or-later. |
 | `docs/steam-input/` | Per-game Steam Input mapping recipes. Add yours! |
-| `.github/workflows/ci.yml` | Tests + clippy on every push and PR. |
+| `docs/troubleshooting.md` | Windows setup, discovery diagnostics, and useful bug-report details. |
+| `.github/workflows/ci.yml` | Formatting, tests, and clippy on main pushes and PRs targeting main. |
 
 ## Test policy
 
@@ -38,13 +39,24 @@ today).
 - Hardware-dependent code (`hidapi_source`, `vjoy`, `bluetooth`) is
   intentionally not unit-tested. Manual verification is the contract;
   in PR descriptions, write what you tested on real hardware.
-- Run `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
-  before pushing.
+
+Run these commands separately before pushing, and resolve any failures:
+
+```pwsh
+cargo fmt --all -- --check
+cargo test --workspace --locked
+cargo build --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+```
+
+Passing these checks does not verify a Bluetooth connection or game input.
+For hardware reports, follow [the troubleshooting guide](docs/troubleshooting.md)
+and identify the last working stage: discovery, sensor reports, vJoy, or Steam.
 
 ## Style
 
-- We follow stock `rustfmt` defaults; just running `cargo fmt` is
-  fine. (Not enforced in CI yet — relax until we add a `fmt` job.)
+- We follow stock `rustfmt` defaults. Run `cargo fmt --all` to format;
+  CI enforces `cargo fmt --all -- --check`.
 - Every public item gets a doc comment. The `#![warn(missing_docs)]`
   in each crate's `lib.rs` will tell you when you forget.
 - New `unsafe` blocks need a `// SAFETY:` comment explaining the

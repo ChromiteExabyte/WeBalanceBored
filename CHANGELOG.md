@@ -8,6 +8,9 @@ once it leaves the 0.x series.
 ## [Unreleased]
 
 ### Added
+- Windows first-run walkthrough and `docs/troubleshooting.md`, with separate
+  checks for pairing, HID discovery, live sensors, vJoy, and Steam.
+- Connection diagnostics fields in the bug-report template.
 - `balance-board-pair` crate — Windows auto-pair tool that scans for
   `Nintendo RVL-WBC-01` devices, computes the special Wii PIN
   (BD_ADDR as raw bytes), authenticates them via the Win32 Bluetooth
@@ -35,12 +38,18 @@ once it leaves the 0.x series.
 - This `CHANGELOG.md` and `CONTRIBUTING.md`.
 
 ### Changed
-- HID discovery is no longer strict-AND on the product string. After a
-  Bluetooth pairing, hidapi on Windows often reports a generic
-  `HID-compliant game controller` string for the child object;
-  discovery now matches by VID + PID (Nintendo + 0x0306) and prefers
-  a `RVL-WBC-01` product string when available. The error path
-  references the new `list_hid_devices` example.
+- Discovery errors now return `NotFound` when no VID/PID candidate is visible,
+  and explain the existing generic-name fallback without assuming a pairing
+  failure. Multi-device warnings identify the selected path and product string.
+- HID diagnostics distinguish matching Wii VID/PID candidates from other
+  Nintendo devices without treating a candidate as a confirmed Balance Board.
+- Superflight instructions now mark the mapping as unverified and require
+  vJoy/Steam checks before game setup; contributing instructions match CI's
+  formatting checks.
+- HID discovery matches by VID + PID (Nintendo + 0x0306), prefers a
+  `RVL-WBC-01` product string when available, and allows a missing or
+  generic product string. The error path references `list_hid_devices`
+  so Windows PnP names need not be used to infer hidapi's values.
 - `balance-board-bridge`'s vJoy FFI changed from compile-time
   `raw-dylib` import (which aborted with `STATUS_DLL_NOT_FOUND` on
   machines without vJoy installed) to runtime `LoadLibraryW` +
@@ -48,7 +57,8 @@ once it leaves the 0.x series.
   only required when actually acquiring a device.
 
 ### Verified
-- 43 unit tests + 2 doc tests across the workspace, all green.
+- Hardware-independent unit and doc tests cover protocol math, parsing,
+  report assembly, PIN formatting, bridge processing, and calibration caching.
 - Auto-pair tool's `--scan` mode confirmed to enumerate real Balance
   Boards on Windows (matched address against a known device's
   BTHENUM PnP ID).

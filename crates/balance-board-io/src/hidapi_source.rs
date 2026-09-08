@@ -18,7 +18,7 @@ const NINTENDO_VID: u16 = 0x057E;
 
 /// Product IDs that have shown up for the Balance Board across firmwares.
 /// The board identifies itself with the same PID as a standard Wiimote;
-/// we disambiguate by the product string `RVL-WBC-01`.
+/// we prefer the product string `RVL-WBC-01` when available.
 const BALANCE_BOARD_PIDS: &[u16] = &[0x0306];
 
 /// Address of the 24-byte calibration block in extension-register space.
@@ -57,18 +57,16 @@ impl HidApiBoard {
     /// stream sensor data.
     ///
     /// # Errors
-    /// - [`io::ErrorKind::NotFound`] if no Balance Board is paired.
+    /// - [`io::ErrorKind::NotFound`] if hidapi exposes no matching VID/PID candidate.
     /// - [`io::ErrorKind::Other`] for any underlying hidapi error.
     ///
     /// # Discovery heuristic
     ///
-    /// On most platforms a Balance Board reports product string
-    /// `Nintendo RVL-WBC-01`, so we prefer that. But on Windows after a
-    /// Bluetooth pairing, hidapi often only exposes the HID *child*
-    /// object whose product string is generic (e.g. `HID-compliant game
-    /// controller`); the friendly Bluetooth-level name is only on the
-    /// parent. To handle that, we fall back to matching by VID + PID
-    /// alone (Nintendo `0x057E`, PID `0x0306` — same as a Wiimote).
+    /// Prefer the product string `Nintendo RVL-WBC-01`. If the HID product
+    /// string is missing or generic, fall back to matching by VID + PID
+    /// alone (Nintendo `0x057E`, PID `0x0306`, also used by Wiimotes).
+    /// Windows' PnP friendly name does not establish what hidapi returns;
+    /// use the `list_hid_devices` example to inspect that directly.
     ///
     /// Edge case: if you have a Wiimote and a Balance Board paired at
     /// the same time and neither exposes a distinguishing product
@@ -95,25 +93,28 @@ impl HidApiBoard {
             })
             .or_else(|| candidates.first().copied())
             .ok_or_else(|| {
-                io::Error::other(format!(
-                    "No Balance Board found via hidapi (looking for VID=0x{NINTENDO_VID:04X}, \
-                     PID one of {BALANCE_BOARD_PIDS:#06x?}).\n\n\
-                     If Windows shows `Nintendo RVL-WBC-01` under Bluetooth Settings but this \
-                     binary still can't see it, the board's HID child may have a generic \
-                     product string. Run the `list_hid_devices` example to see what hidapi \
-                     reports on this machine:\n  \
-                     cargo run -p balance-board-io --example list_hid_devices\n\n\
-                     If the board isn't paired yet, pair `Nintendo RVL-WBC-01` via Windows \
-                     Bluetooth Settings first."
-                ))
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!(
+                        "No Balance Board candidate found via hidapi (VID=0x{NINTENDO_VID:04X}, \
+                         PID (hex) in {BALANCE_BOARD_PIDS:04x?}).\n\n\
+                         A Windows pairing record does not guarantee a usable HID interface. \
+                         Missing or generic product strings are already accepted.\n\
+                         Wake the board with its front Power button, then inspect what hidapi sees:\n  \
+                         cargo run --release --locked -p balance-board-io --example list_hid_devices\n\n\
+                         See docs/troubleshooting.md for connection checks and bug-report details."
+                    ),
+                )
             })?;
 
         if candidates.len() > 1 {
             eprintln!(
-                "warning: {} devices match Nintendo VID+PID; picking first ({:?}). \
-                 Use `list_hid_devices` + open_path() if this is wrong.",
+                "warning: {} devices share the Wii Remote/Balance Board VID+PID; selected {:?} \
+                 (product: {:?}). Run `list_hid_devices` to inspect candidates; \
+                 disconnect other Wii devices if the wrong one is selected.",
                 candidates.len(),
                 chosen.path(),
+                chosen.product_string(),
             );
         }
 

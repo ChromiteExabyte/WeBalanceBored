@@ -3,10 +3,9 @@
 //!
 //! Use this when [`balance_board_io::HidApiBoard::open`] returns
 //! `NotFound` even though Windows clearly shows `Nintendo RVL-WBC-01`
-//! under Bluetooth Settings. The output tells you exactly which fields
-//! hidapi populated on this machine — most often the difference is a
-//! generic `HID-compliant game controller` product string instead of
-//! the Bluetooth-level name.
+//! under Bluetooth Settings. The output shows which fields hidapi
+//! populated; Windows' friendly names alone do not establish those values.
+//! A matching VID/PID identifies a candidate, not a confirmed Balance Board.
 //!
 //! ```pwsh
 //! cargo run -p balance-board-io --example list_hid_devices
@@ -15,18 +14,25 @@
 use hidapi::HidApi;
 
 const NINTENDO_VID: u16 = 0x057E;
+const WII_PID: u16 = 0x0306;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api = HidApi::new()?;
     let mut total = 0usize;
     let mut nintendo = 0usize;
+    let mut candidates = 0usize;
 
     for info in api.device_list() {
         total += 1;
         let is_nintendo = info.vendor_id() == NINTENDO_VID;
         if is_nintendo {
             nintendo += 1;
-            println!("--- device {total} (NINTENDO — likely candidate) ---");
+        }
+        if is_nintendo && info.product_id() == WII_PID {
+            candidates += 1;
+            println!("--- device {total} (Wii Remote / Balance Board candidate) ---");
+        } else if is_nintendo {
+            println!("--- device {total} (Nintendo, different product ID) ---");
         } else {
             println!("--- device {total} ---");
         }
@@ -44,12 +50,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!();
     println!("{total} HID device(s) total; {nintendo} from Nintendo (VID 0x057E).");
-    if nintendo == 0 {
+    println!("{candidates} Wii Remote / Balance Board candidate(s) (VID 0x057E, PID 0x0306).");
+    if candidates == 0 {
         println!(
-            "No Nintendo devices visible to hidapi. Either the Balance Board \
-             isn't paired yet, or it's paired but Windows hasn't surfaced it as \
-             a usable HID interface (try unpair + repair, or check Bluetooth \
-             Settings to confirm it shows as connected)."
+            "No matching HID candidate is visible. Wake the board and compare this \
+             output with Windows' device list. Pairing status alone does not confirm \
+             a usable HID interface; see docs/troubleshooting.md."
+        );
+    } else {
+        println!(
+            "These IDs are shared with Wii Remotes; a match does not confirm board identity \
+             or working sensor reports. Next: \
+             cargo run --release --locked -p balance-board-io --example print_sensors"
         );
     }
     Ok(())

@@ -1,142 +1,77 @@
-# Playing Superflight with a Wii Balance Board
+# Superflight setup checklist
 
-End-to-end recipe to get from a paired board to actually flying through
-canyons. Assumes you already ran:
+**Experimental: this game setup has not yet been verified end to end.**
+There is no tested, importable `.vdf` profile in this repository yet. Use the
+checks below to establish which stages work on your machine before tuning
+the controls.
+
+The intended path is:
+
+```text
+Balance Board -> Bluetooth HID -> bridge -> vJoy -> Steam Input -> Superflight
+```
+
+## 1. Confirm live input reaches vJoy
+
+Complete the [Windows quickstart](../../README.md#start-here-windows), then run:
 
 ```pwsh
-cargo run --release -p balance-board-bridge
+cargo run --release --locked -p balance-board-bridge -- --verbose
 ```
 
-and saw the bridge open the board, capture tare, and start streaming
-("Streaming. Ctrl-C to stop.").
+Step on the board when prompted, stand still for tare, and keep the bridge
+running after `Streaming` appears. Open Windows Run (**Win+R**), enter
+`joy.cpl`, select the vJoy controller, and open its test view. Lean left,
+right, forward, and back: the X/Y indicators should respond.
 
-If you didn't get that far, see [the discovery diagnostic][list-devices]
-or back up to the project [README][readme].
+If they do not, stop here and follow [troubleshooting](../troubleshooting.md).
+A running bridge alone does not establish that vJoy received its output.
 
-[list-devices]: ../../crates/balance-board-io/examples/list_hid_devices.rs
-[readme]: ../../README.md
+## 2. Check Steam recognition
 
----
+Open Steam's controller settings and look for the vJoy device. If Steam offers
+support or setup for generic controllers, enable/configure that device. Labels
+vary by Steam version; Xbox, PlayStation, and Switch options are not
+interchangeable substitutes for generic-controller support.
 
-## What we're building
+Valve lists generic DirectInput gamepads among
+[Steam Input's supported devices](https://partner.steamgames.com/doc/features/steam_controller/device).
+That does not verify this particular vJoy configuration. If the device responds
+in `joy.cpl` but is absent from Steam, report that result with your Steam and
+vJoy versions before attempting game bindings.
 
-```
-Balance Board → bridge → vJoy device #1 → Steam Input → Superflight
-              \────── this repo ──────/  \─── Steam UI configures ───/
-```
+## 3. Map and test the controls
 
-The bridge is doing the hard part already — turning your weight shifts
-into a virtual gamepad. Steam Input is what tells Superflight *which*
-gamepad axis means *which* in-game action.
+Enable Steam Input for Superflight as needed and open its controller layout
+with vJoy selected. Map the board's X/Y to the gamepad stick that actually
+controls steering in the game. The earlier proposed right-stick mapping is
+unverified; confirm the game's controls with a normal controller first.
 
----
+| Bridge output | Meaning |
+| --- | --- |
+| X | Left/right lean, relative to the captured stance |
+| Y | Forward/back lean, relative to the captured stance |
+| Z, Rx, Ry, Rz | Loads at top-right, bottom-right, top-left, bottom-left |
+| Button 1 | Board button state reported by the firmware |
 
-## 1. Confirm Steam sees vJoy as a controller
-
-While `balance-board-bridge` is running, lean around on the board. You
-should already be feeding vJoy device #1.
-
-In Steam:
-
-1. **Steam → Settings → Controller**.
-2. Enable **"Generic Gamepad Configuration Support"** (sometimes labeled
-   "PlayStation / Switch / Xbox Extended Configuration Support" — the
-   relevant toggle is whichever covers generic DirectInput devices).
-3. Scroll to **Detected Controllers**. You should see something like
-   `vJoy Virtual Joystick` or `Generic USB Joystick`. If you don't:
-   - Re-check that `balance-board-bridge` is still running and the
-     terminal shows `Streaming. Ctrl-C to stop.`
-   - In Windows: open `joy.cpl` (Win+R, type `joy.cpl`). Pick the vJoy
-     device, click **Properties → Test**, lean on the board. If the
-     X/Y crosshair moves, vJoy is good. If not, the bridge isn't
-     reaching vJoy — re-check vJoy install and that device #1 is
-     enabled in vJoyConf.
-
----
-
-## 2. Add Superflight (if not on Steam) and launch it
-
-Superflight is on Steam, so just install it normally. Launch it once to
-confirm it runs.
-
-Quit back to Steam.
-
----
-
-## 3. Bind vJoy axes to the in-game stick
-
-1. In Steam, **right-click Superflight → Manage → Controller layout**
-   (the wording shifts between Steam versions; the goal is the
-   per-game controller configuration UI).
-2. With Superflight's controller layout open, make sure the active
-   controller is your vJoy device, not your real gamepad.
-3. Click **Edit Layout** and pick a starting template — **Gamepad** is
-   fine. We're overwriting the bits we care about.
-4. **Right Stick → Click anywhere on the stick → Bind to Joystick**:
-   - Joystick **X axis** → vJoy axis **X**
-   - Joystick **Y axis** → vJoy axis **Y**
-5. **Deadzones** (Right Stick → Settings):
-   - Outer deadzone: ~0.05 (so leaning hard fully maxes the input)
-   - Inner deadzone: ~0.10 (so a relaxed neutral stand stays still
-     even after the bridge's tare)
-   - Anti-deadzone: 0 (let the bridge handle that)
-
-Save the layout (give it a name like "Balance Board"). Steam Input
-applies it immediately while the game is running.
-
-> The bridge also publishes per-corner kg loads on **Z, Rx, Ry, Rz**.
-> Superflight doesn't need them, but you can bind them later for
-> chord moves (e.g. heavy bottom-corner press → boost).
-
----
-
-## 4. Sanity check before flying
-
-In the controller config, with the binding view open, lean forward on
-the board. The on-screen Right Stick indicator should move forward.
-Same for back / left / right. If the directions feel inverted, swap by
-toggling the axis "Invert" checkbox per-axis in the binding settings —
-that's faster than re-running the bridge with a different sign convention.
-
----
-
-## 5. Fly
-
-Launch Superflight from Steam. Right Stick controls the plane. Lean
-forward to dive, back to climb, side-to-side to bank.
-
-> First-flight tip: stand close to the front of the board. Wii Balance
-> Boards have a bit more sensor on the front edge than the back, and
-> standing centered front-to-back makes the up/down range feel
-> symmetric. The bridge's tare handles small offsets but can't fix a
-> dramatic stance bias.
-
----
+Start with smoothing enabled. Test all four directions in-game and invert an
+axis in the layout if necessary. Adjust the inner deadzone only enough to
+remove drift, then tune the response to a comfortable lean range. Keep a
+keyboard or normal controller available for menus and any unmapped actions.
 
 ## Troubleshooting
 
-| Symptom | Likely cause |
+| Symptom | Check |
 | --- | --- |
-| Stick drifts when standing still | Re-run bridge so tare re-captures, or bump Steam Input inner deadzone to 0.15. |
-| Stick feels twitchy / wobbly | Re-run without `--no-smooth`. Or lower `COG_ALPHA` constant in `main.rs` for more smoothing (slower response). |
-| Stick maxes out before fully leaning | Lower `MIN_TOTAL_KG` (currently 2.0) or reduce Steam Input outer deadzone. Also consider shortening the bridge's per-corner full-scale: lean affects X/Y via COG which is normalized per-frame, so this shouldn't bite typically. |
-| Steam doesn't see vJoy | Run `joy.cpl` test as above. If joy.cpl shows axes moving, the issue is Steam Input — toggle Generic Gamepad Support off/on, restart Steam. |
-| Bridge prints "could not acquire vJoy device 1" | vJoy device 1 isn't enabled. Open **vJoyConf** (Start menu), tick device 1, ensure axes X/Y/Z/Rx/Ry/Rz are enabled, click Apply. |
+| Drifts while standing still | Restart the bridge and stand still during tare; then adjust the inner deadzone if needed. |
+| Input feels twitchy | Ensure `--no-smooth` is not set. |
+| Input saturates too early | Inspect the game's sensitivity and Steam Input response/deadzone settings. `MIN_TOTAL_KG` is an unloaded-board threshold; per-corner full scale affects Z/Rx/Ry/Rz, not X/Y sensitivity. |
+| No input in-game, but `joy.cpl` works | Confirm Steam sees vJoy, the layout targets that device, and the selected stick controls steering. |
+| Unexpected weights after switching boards | Run with `--no-cache` once to refresh the shared calibration cache. |
 
----
+## Share a working setup
 
-## Other games
-
-This same vJoy controller config works for any game that accepts a
-generic DirectInput / Xbox-style gamepad through Steam Input. The
-mapping is just: lean = stick movement. For non-flight games:
-
-- **Driving / racing**: bind X to steering, Y to throttle/brake split.
-- **First-person**: bind to *Left* Stick (movement) instead of Right
-  Stick (camera) — leaning to walk around is more natural than
-  leaning to look around.
-- **Rhythm / fitness**: per-corner Z/Rx/Ry/Rz axes can detect each
-  foot independently — useful for stomp-on-pad mechanics.
-
-If you build a config for a specific game and it works well, send a PR
-adding it to this directory.
+Once verified, contribute your exported layout with import instructions, axis
+assignments, Steam/vJoy versions, and a short hardware test report. Describe
+what you actually tested, including centering, all four lean directions, and
+menu controls. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
