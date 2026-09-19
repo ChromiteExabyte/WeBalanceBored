@@ -15,9 +15,10 @@ cargo build --release --workspace --locked
 Rust 1.75+ is the floor. On Windows you need the MSVC linker (Visual
 Studio Build Tools "Desktop development with C++" workload, or VS
 Community with the same workload). On Linux/macOS, the protocol crate
-builds with stock cargo; the I/O and bridge crates need libudev / a
-real hidapi backend respectively (those layers are Windows-first
-today).
+builds with stock cargo. The full Linux workspace needs a C toolchain,
+pkg-config, and libudev headers (`build-essential pkg-config libudev-dev` on
+Debian/Ubuntu). Linux input uses hid_wiimote/evdev and output uses uinput.
+See [Linux setup](docs/linux.md) for runtime permissions.
 
 ## Repository layout
 
@@ -25,7 +26,7 @@ today).
 | --- | --- |
 | `crates/balance-board-protocol/` | Pure parsing, calibration, COG math, smoothing filter. Zero deps, MPL-2.0. **Most contributions to algorithms, formats, or reusable types belong here.** |
 | `crates/balance-board-io/` | `hidapi` discovery + Wiimote handshake + EEPROM read assembler. MPL-2.0. |
-| `crates/balance-board-bridge/` | The end-user binary. vJoy, tare, smoothing, calibration cache. GPL-3.0-or-later. |
+| `crates/balance-board-bridge/` | Shared engine, terminal launcher, vJoy/uinput output, tare, smoothing, and calibration cache. GPL-3.0-or-later. |
 | `crates/balance-board-pair/` | Windows auto-pair tool. GPL-3.0-or-later. |
 | `docs/steam-input/` | Per-game Steam Input mapping recipes. Add yours! |
 | `docs/troubleshooting.md` | Windows setup, discovery diagnostics, and useful bug-report details. |
@@ -36,9 +37,9 @@ today).
 - Anything testable without hardware **should** have a unit test. The
   protocol crate is the gold standard — every byte-format claim is
   pinned by a fixture test.
-- Hardware-dependent code (`hidapi_source`, `vjoy`, `bluetooth`) is
-  intentionally not unit-tested. Manual verification is the contract;
-  in PR descriptions, write what you tested on real hardware.
+- Hardware calls need manual verification; in PR descriptions, write what
+  you tested on real hardware. Report-reading and connection recovery can
+  also be tested with injected transports without claiming hardware success.
 
 Run these commands separately before pushing, and resolve any failures:
 

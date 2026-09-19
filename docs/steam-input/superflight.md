@@ -11,12 +11,15 @@ The intended path is:
 Balance Board -> Bluetooth HID -> bridge -> vJoy -> Steam Input -> Superflight
 ```
 
+On Linux, choose **2** in the launcher and look for **WeBalanceBored Controller**
+in Steam. See [Linux help](../linux.md). The vJoy checks below apply to Windows.
+
 ## 1. Confirm live input reaches vJoy
 
-Complete the [Windows quickstart](../../README.md#start-here-windows), then run:
+Complete the [Windows quickstart](../../README.md#start-here--no-rust-required), then run:
 
 ```pwsh
-cargo run --release --locked -p balance-board-bridge -- --verbose
+cargo run --release --locked -p balance-board-bridge --bin balance-board-bridge -- --verbose
 ```
 
 Step on the board when prompted, stand still for tare, and keep the bridge
@@ -67,7 +70,7 @@ keyboard or normal controller available for menus and any unmapped actions.
 | Input feels twitchy | Ensure `--no-smooth` is not set. |
 | Input saturates too early | Inspect the game's sensitivity and Steam Input response/deadzone settings. `MIN_TOTAL_KG` is an unloaded-board threshold; per-corner full scale affects Z/Rx/Ry/Rz, not X/Y sensitivity. |
 | No input in-game, but `joy.cpl` works | Confirm Steam sees vJoy, the layout targets that device, and the selected stick controls steering. |
-| Unexpected weights after switching boards | Run with `--no-cache` once to refresh the shared calibration cache. |
+| Unexpected weights after switching boards | Run with `--no-cache` once to bypass the per-device Windows calibration cache. |
 
 ## Share a working setup
 

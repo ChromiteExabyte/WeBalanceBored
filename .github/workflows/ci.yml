@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, polish/windows-setup]
   pull_request:
     branches: [main]
 
@@ -34,9 +34,12 @@ jobs:
   # Builds and tests the entire workspace on the real target platform.
   # Catches hidapi build-script issues, raw-dylib resolution, anything
   # MSVC-specific.
-  workspace-windows:
-    name: full workspace (windows)
-    runs-on: windows-latest
+  workspace:
+    name: full workspace (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -45,9 +48,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
       - name: cargo build
-        run: cargo build --workspace --all-targets
+        run: cargo build --workspace --all-targets --locked
       - name: cargo test
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       - name: cargo clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings

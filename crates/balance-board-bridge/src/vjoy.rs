@@ -78,16 +78,41 @@ impl VJoyApi {
     fn load() -> io::Result<Self> {
         // SAFETY: we own the wide-char buffer for the duration of the call;
         // `LoadLibraryW` reads it but doesn't store it.
-        let module = unsafe {
-            let name: Vec<u16> = "vJoyInterface.dll\0".encode_utf16().collect();
-            LoadLibraryW(name.as_ptr())
+        // Standard installer locations should work without editing PATH.
+        let architecture = if cfg!(target_pointer_width = "64") {
+            "x64"
+        } else {
+            "x86"
         };
+        let mut paths = Vec::new();
+        for variable in ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"] {
+            if let Some(root) = std::env::var_os(variable) {
+                paths.push(
+                    std::path::PathBuf::from(root)
+                        .join("vJoy")
+                        .join(architecture)
+                        .join("vJoyInterface.dll"),
+                );
+            }
+        }
+        paths.push(std::path::PathBuf::from("vJoyInterface.dll"));
+        let mut module = std::ptr::null_mut();
+        for path in paths {
+            use std::os::windows::ffi::OsStrExt;
+            let name: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            // SAFETY: null-terminated UTF-16 lives through this call.
+            module = unsafe { LoadLibraryW(name.as_ptr()) };
+            if !module.is_null() {
+                break;
+            }
+        }
         if module.is_null() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
                 "vJoyInterface.dll could not be loaded. Install vJoy from \
-                 https://github.com/jshafer817/vJoy/releases and ensure its \
-                 install dir (e.g. C:\\Program Files\\vJoy\\x64) is on PATH.",
+                 https://github.com/jshafer817/vJoy/releases. Standard install folders are checked \
+                 automatically; for a custom installation, add its DLL directory to PATH. \
+                 Live-weight mode works without vJoy.",
             ));
         }
 
@@ -144,6 +169,18 @@ pub struct VJoyDevice {
 }
 
 impl VJoyDevice {
+    /// Check the DLL and driver without acquiring or moving a controller.
+    pub fn check_available() -> io::Result<()> {
+        let api = VJoyApi::load()?;
+        // SAFETY: enabled is a resolved function pointer owned by api.
+        if unsafe { (api.enabled)() } == 0 {
+            return Err(io::Error::other(
+                "vJoy driver is not enabled. Open Configure vJoy.",
+            ));
+        }
+        Ok(())
+    }
+
     /// Load `vJoyInterface.dll`, check the driver is enabled, and acquire
     /// device `id` (1–16; vJoy ships with device 1 by default).
     ///

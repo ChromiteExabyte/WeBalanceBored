@@ -7,6 +7,18 @@ once it leaves the 0.x series.
 
 ## [Unreleased]
 
+### Windows and Linux terminal launcher
+- Added `we-balance-bored`: menu options for live weight, controller mode,
+  pairing, and setup checks. Monitor mode needs no virtual-controller driver.
+- Shared connection engine with cooperative Ctrl+C cleanup, per-device Windows
+  calibration caching, and fresh stance capture after reconnect.
+- Native Linux calibrated evdev input through hid_wiimote and uinput controller
+  output. BlueZ pairing is available from the launcher.
+- Standard vJoy installation directories are searched automatically.
+- Linux one-time device-permission setup and packaged Windows/Linux launchers.
+- Full-workspace Linux CI and downloadable ZIP/tar.gz build artifacts. These
+  remain experimental builds; hardware and game integration are unverified.
+
 ### Connection reliability
 - Pairing refreshes the Windows device record before checking authentication,
   avoiding unnecessary authentication of an already-paired board. Corrected

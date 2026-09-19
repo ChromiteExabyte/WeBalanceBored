@@ -1,0 +1,28 @@
+WeBalanceBored — experimental Windows / Linux launcher
+
+WINDOWS
+Extract the complete ZIP, then double-click Start-WeBalanceBored.cmd.
+Choose 3 to pair (press the red SYNC button when prompted).
+Choose 1 to see live weight. This does not need vJoy or Steam.
+For games: install vJoy, configure device 1 with X/Y/Z/Rx/Ry/Rz and one
+button, then choose 2. The app finds vJoy in its standard install directory.
+vJoy releases: https://github.com/jshafer817/vJoy/releases
+
+LINUX (x86-64 desktop, Debian 12 / Ubuntu 24.04 or compatible newer glibc)
+Extract the complete tar.gz. Install your distro's BlueZ and libudev packages.
+Run ./setup-linux.sh once (sudo is used for device permissions only).
+Run ./start-we-balance-bored.sh as your normal desktop user.
+Choose 3 to pair, then 1 to verify weight or 2 for controller output.
+The launcher uses BlueZ, hid_wiimote, and uinput; vJoy is not needed.
+X11 and Wayland are both supported; no graphical toolkit is required.
+
+DAILY USE
+Wake the paired board with its front Power button, launch, choose 1 or 2.
+Controller mode asks you to stand centered. Ctrl+C stops and clears output.
+Select 4 for setup diagnostics. Steam mapping is still a separate step.
+Multiple boards: Linux pairing asks which board to use; keep only the intended
+board connected when starting a sensor session. Reconnect stays on that board.
+
+Hardware compatibility remains experimental. A successful build is not proof
+that your adapter, pairing, sensor readings, or Steam mapping work end to end.
+More help: README.md and docs/linux.md in this download.

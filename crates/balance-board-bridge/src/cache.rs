@@ -11,8 +11,8 @@
 //! - The cache holds 24 raw bytes. If [`balance_board_protocol::Calibration::from_eeprom`]
 //!   rejects the cached bytes (monotonicity check fails), the caller
 //!   should discard and re-read from the board.
-//! - Single cache file regardless of which board is connected — if you
-//!   swap boards, run the bridge with `--no-cache` once to refresh.
+//! - The Windows backend supplies a subdirectory keyed to the HID path.
+//!   The old shared cache is ignored. Reconnects always read fresh calibration.
 
 use std::fs;
 use std::io;

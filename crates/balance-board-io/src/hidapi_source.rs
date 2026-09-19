@@ -96,15 +96,9 @@ impl HidApiBoard {
             .ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
-                    format!(
-                        "No Balance Board candidate found via hidapi (VID=0x{NINTENDO_VID:04X}, \
-                         PID (hex) in {BALANCE_BOARD_PIDS:04x?}).\n\n\
-                         A Windows pairing record does not guarantee a usable HID interface. \
-                         Missing or generic product strings are already accepted.\n\
-                         Wake the board with its front Power button, then inspect what hidapi sees:\n  \
-                         cargo run --release --locked -p balance-board-io --example list_hid_devices\n\n\
-                         See docs/troubleshooting.md for connection checks and bug-report details."
-                    ),
+                    "No Balance Board HID interface is available. Wake a paired board with its front Power button. \
+                     For first-time setup, choose Pair in the launcher. A pairing record alone does not \
+                     confirm a usable connection. See docs/troubleshooting.md if the board stays unavailable.",
                 )
             })?;
 
@@ -154,6 +148,15 @@ impl HidApiBoard {
     /// The selected HID path, for reconnecting to the same device.
     pub fn path(&self) -> &CString {
         &self.path
+    }
+
+    /// Wait at most `timeout` for a valid sensor report.
+    /// Returns `TimedOut` if no sensor data arrives; callers may retry.
+    pub fn next_report_timeout(&mut self, timeout: Duration) -> io::Result<BoardReport> {
+        read_sensor_report(
+            |buf, timeout_ms| self.device.read_timeout(buf, timeout_ms).map_err(io_err),
+            timeout,
+        )
     }
 
     fn disable_extension_encryption(&mut self) -> io::Result<()> {

@@ -1,7 +1,7 @@
 [package]
 name = "balance-board-bridge"
 version = "0.1.0"
-description = "Wii Balance Board → vJoy bridge for Steam Input. Lets you play Steam games using a Balance Board."
+description = "Wii Balance Board launcher and controller bridge for Windows and Linux."
 license = "GPL-3.0-or-later"
 publish = false
 edition.workspace = true
@@ -12,3 +12,11 @@ repository.workspace = true
 [dependencies]
 balance-board-protocol = { path = "../balance-board-protocol", version = "0.1.0" }
 balance-board-io       = { path = "../balance-board-io",       version = "0.1.0" }
+ctrlc = "3.4"
+
+[[bin]]
+name = "we-balance-bored"
+path = "src/launcher.rs"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "0.13.2"

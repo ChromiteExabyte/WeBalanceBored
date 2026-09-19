@@ -55,6 +55,9 @@ removing a working pairing before collecting the HID diagnostic.
 
 ## Discovery succeeds, but calibration or streaming fails
 
+The terminal launcher offers live weight without vJoy via option 1 or `--monitor`.
+Use option 4 or `--doctor` to check setup.
+
 The bridge now retries board discovery, calibration transport failures, and
 sensor-read failures. No valid sensor data for three seconds counts as a
 timeout, including when unrelated HID reports keep arriving. On a streaming
@@ -78,7 +81,7 @@ but the transport/handshake or protocol still needs investigation. Report the
 exact error and HID candidate details; do not treat a later error as a fix.
 The sensor example reads calibration directly from the board. The bridge can
 also force a fresh read with `--no-cache`, which is needed after swapping boards
-because the current cache is shared across devices.
+to bypass the per-device Windows cache. Old shared caches are ignored.
 
 Success is a continuously updating table whose loads respond to you stepping
 on and leaning. Use **Ctrl+C** to stop a run that stalls, and include its last
@@ -103,7 +106,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $vjoyDir 'vJoyInterface.dll'))) {
     throw "vJoyInterface.dll was not found in $vjoyDir. Check your install location."
 }
 $env:Path = "$vjoyDir;$env:Path"
-cargo run --release --locked -p balance-board-bridge -- --verbose
+cargo run --release --locked -p balance-board-bridge --bin balance-board-bridge -- --verbose
 ```
 
 ## A useful bug report

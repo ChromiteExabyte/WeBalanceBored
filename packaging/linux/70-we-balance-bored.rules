@@ -1,0 +1,6 @@
+# Grant the active local desktop user access to Wii Balance Board readings.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="*Balance Board*", ATTRS{id/vendor}=="057e", TAG+="uaccess"
+# uinput is required only for virtual game-controller output.
+SUBSYSTEM=="misc", KERNEL=="uinput", TAG+="uaccess", OPTIONS+="static_node=uinput"
+# Make the resulting virtual controller available to the desktop session.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="WeBalanceBored Controller", ENV{ID_INPUT_JOYSTICK}="1", TAG+="uaccess"

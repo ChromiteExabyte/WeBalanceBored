@@ -1,121 +1,109 @@
 # WeBalanceBored
 
-[![CI](https://github.com/ChromiteExabyte/WeBalanceBored/actions/workflows/ci.yml/badge.svg)](https://github.com/ChromiteExabyte/WeBalanceBored/actions/workflows/ci.yml)
+A simple terminal launcher for the Wii Balance Board on **Windows and Linux**.
+Connect the board, see live weight, or use your lean as a game controller.
 
-A Wii Balance Board → Steam Input bridge for Windows. Built as a Rust workspace
-so the protocol parsing and calibration math are reusable by other Balance
-Board projects, not locked inside this app.
+**Experimental:** software tests pass independently of hardware. Pairing,
+Bluetooth-adapter compatibility, and the complete Steam/game path still need
+physical-board verification on each platform.
 
-## Status
+## Start here — no Rust required
 
-**Pre-alpha: buildable from source, with hardware verification still in progress.**
-Passing tests checks the software; it does not confirm that pairing, sensor
-streaming, vJoy, and Steam work together on your machine.
+Download the package for your OS from the latest successful
+[Downloadable apps workflow](https://github.com/ChromiteExabyte/WeBalanceBored/actions/workflows/packages.yml).
+Open a successful run and download its artifact (GitHub sign-in may be required).
+Extract the outer artifact ZIP and then the app ZIP/tar.gz inside it. These are
+CI builds, not signed installers or stable releases.
 
-| Layer | State |
+| Windows 11 | Linux desktop (x86-64) |
 | --- | --- |
-| Protocol parsing & calibration | Implemented, unit-tested with byte fixtures |
-| HID I/O (`hidapi`) | Implemented; needs hardware to verify |
-| vJoy output (runtime LoadLibraryW FFI) | Implemented; needs vJoy + hardware to verify |
-| Bridge with tare + smoothing + calibration cache | Implemented; full game pipeline not yet hardware-verified |
-| Auto-pair tool (Win32 Bluetooth) | Scan implemented + verified; pair implemented, needs a SYNC-pressed board to fully verify |
-| Steam Input setup guide for Superflight | [docs/steam-input/superflight.md](docs/steam-input/superflight.md) |
-| System tray / config UI | Not started |
+| Double-click **Start-WeBalanceBored.cmd**. | Run **setup-linux.sh** once, then **start-we-balance-bored.sh**. |
+| Bluetooth is enough for live weight. | Needs BlueZ, libudev, udev/logind, and the kernel hid_wiimote driver. |
+| Game mode additionally needs vJoy. | Game mode uses the kernel uinput interface; no vJoy. |
 
-## Start here (Windows)
+The menu is the same on both platforms:
 
-### 1. Build the software
+```text
+1  Connect and view live weight
+2  Play — start controller output
+3  Pair a board
+4  Check setup
+Q  Quit
+```
 
-Install [Rust](https://rust-lang.org/tools/install/) and the Visual Studio
-C++ Build Tools when prompted. Reopen PowerShell after installing them.
-Open PowerShell in the downloaded repository folder, the one containing
-`Cargo.toml`, and run each command separately:
+For a new board, choose **3**, press red **SYNC** inside the battery compartment
+when prompted, and complete pairing. Then choose **1** to verify that weight
+changes when you step on the board. Flashing lights or a successful pairing
+command alone do not prove sensor input works.
 
-```pwsh
+For daily use, wake the paired board with its front **Power** button and choose
+**1** or **2**. **Ctrl+C** disconnects and clears controller output. A lost
+connection is retried automatically. Keep only the intended board connected
+when starting; reconnection stays with the selected device.
+
+### Windows game setup — once
+
+Install [vJoy](https://github.com/jshafer817/vJoy/releases). In **Configure vJoy**,
+enable device **1**, axes **X, Y, Z, Rx, Ry, Rz**, and at least **one button**.
+The app searches standard vJoy installation folders automatically.
+Choose **2**, stand comfortably centered, and wait for live readings. Check
+axis movement in **joy.cpl**, then configure your game in Steam Input.
+
+### Linux setup — once
+
+On Debian/Ubuntu, install runtime prerequisites:
+
+```sh
+sudo apt install bluez libudev1
+./setup-linux.sh
+./start-we-balance-bored.sh
+```
+
+The setup script uses sudo to install device access rules and load kernel
+modules. Run the launcher as your normal desktop user. It does not require
+world-writable input devices or membership in the broad `input` group.
+The packaged build targets x86-64 Linux with glibc 2.35 or newer; other
+architectures can build from source. See [Linux help](docs/linux.md).
+
+## Developer setup
+
+Users of the downloadable packages do **not** need a compiler. To build locally,
+install Rust and the platform build prerequisites:
+
+- Windows: Visual Studio C++ Build Tools and a Windows SDK.
+- Debian/Ubuntu: `sudo apt install build-essential pkg-config libudev-dev`.
+
+```sh
 cargo test --workspace --locked
 cargo build --release --workspace --locked
+cargo run --release --locked -p balance-board-bridge --bin we-balance-bored
 ```
 
-The first command tests the code without a board. The second compiles the
-programs into `target\release`. Stop and resolve any error before continuing.
+From source, the Linux setup script is `packaging/linux/setup-linux.sh`.
+The Windows pairing helper is built alongside the launcher by the workspace build.
 
-### 2. Connect the board
+## Direct commands
 
-| Button | When to use it |
-| --- | --- |
-| Red **SYNC**, inside the battery compartment | Start pairing; the blue indicator flashes. Flashing alone does not confirm a connection. |
-| Front **Power** button | Wake a board that has already been paired. |
-
-If Windows already lists `Nintendo RVL-WBC-01`, wake the board and try the
-sensor test below first. If it is not paired, press red **SYNC** immediately
-before running the already-built pairing tool:
-
-```pwsh
-.\target\release\balance-board-pair.exe
-```
-
-This experimental tool attempts pairing and enables the HID service. Its
-Bluetooth scan has been hardware-tested; the full pairing handshake still
-needs verification. `--scan` lists nearby Wii devices without pairing them.
-`--forget` removes **all** Balance Boards known to Windows; it is not a
-routine startup step.
-
-### 3. Check live sensor values
-
-```pwsh
-cargo run --release --locked -p balance-board-io --example print_sensors
-```
-
-This needs the board and Bluetooth, but **does not need vJoy or Steam**.
-Success means a live table of corner loads and total kilograms that changes
-when you step on the board. Press **Ctrl+C** to stop.
-
-If it cannot find the board or read calibration, use the
-[troubleshooting guide](docs/troubleshooting.md) before moving on.
-
-### 4. Start the game-controller bridge
-
-Install [vJoy](https://github.com/jshafer817/vJoy/releases) and open
-**Configure vJoy**. Enable device **1**, axes **X, Y, Z, Rx, Ry, Rz**, and
-at least **one button**. Then run:
-
-```pwsh
-cargo run --release --locked -p balance-board-bridge -- --verbose
-```
-
-When prompted, step on the board and stand comfortably still while the
-bridge captures your centered stance (tare). Wait for `Streaming` and keep
-this terminal running. Open `joy.cpl` from Windows Run (**Win+R**), select
-vJoy, and check that its X/Y axes move when you lean.
-
-The bridge checks vJoy first, then waits for the board. If sensor reports
-stop for three seconds, it clears the virtual controller and retries the same
-HID device every two seconds. Wake the paired board with **Power**; after
-reconnection it reads fresh calibration and asks you to center your stance
-again. It does not automatically pair or remove devices. If Windows changes
-the HID path after re-pairing, restart the bridge. This recovery behavior still
-needs verification with a physical board.
-
-Once that works, follow the [Superflight setup guide](docs/steam-input/superflight.md).
-Steam recognition and the game mapping are separate checks; a successful
-build or `Streaming` message alone does not prove that they work.
-
-## Useful commands
-
-Run these from the repository folder:
+Run these built executables from `target/release` (append `.exe` on Windows),
+or from the extracted package:
 
 | Task | Command |
 | --- | --- |
-| Test protocol math without hardware | `cargo test --locked -p balance-board-protocol` |
-| List the HID devices the app can actually see | `cargo run --release --locked -p balance-board-io --example list_hid_devices` |
-| Scan Bluetooth without pairing | `.\target\release\balance-board-pair.exe --scan` |
-| Show bridge options | `.\target\release\balance-board-bridge.exe --help` |
-| Refresh calibration after switching boards | `.\target\release\balance-board-bridge.exe --no-cache --verbose` |
+| Menu | `we-balance-bored` |
+| Live weight, no game driver | `we-balance-bored --monitor` |
+| Controller mode | `we-balance-bored --gamepad` |
+| Bluetooth pairing | `we-balance-bored --pair` |
+| Setup diagnostics | `we-balance-bored --doctor` |
+| Legacy bridge entry point | `balance-board-bridge --verbose` |
 
-The bridge captures tare and smooths input by default. `--no-tare` and
-`--no-smooth` disable those steps for diagnosis. Its calibration cache is a
-single file at `%APPDATA%\WeBalanceBored\calibration.bin`, not keyed to the
-board: use `--no-cache` once whenever you switch physical boards.
+Controller mode supports `--no-tare`, `--no-smooth`, and `--no-cache`.
+Windows calibration is cached per HID path; reconnects always read it fresh.
+Linux uses already-calibrated kernel readings, so it does not use that cache.
+On Windows, restart the app after re-pairing if the HID path changes. Linux
+reconnects by the board's unique identity when the kernel provides one.
+
+For Windows diagnostics see [troubleshooting](docs/troubleshooting.md).
+For game mapping see the [Superflight checklist](docs/steam-input/superflight.md).
 
 ## Workspace layout
 
@@ -123,7 +111,7 @@ board: use `--no-cache` once whenever you switch physical boards.
 | --- | --- | --- |
 | `balance-board-protocol` | MPL-2.0 | Pure parsing, calibration, center-of-gravity math, smoothing filter. No I/O, zero deps, runs on any machine without a board. |
 | `balance-board-io` | MPL-2.0 | HID glue via `hidapi`. Reads bytes off the wire, hands them to the protocol crate. Cross-platform. |
-| `balance-board-bridge` | GPL-3.0-or-later | The end-user binary. vJoy output, tare + smoothing, calibration cache. |
+| `balance-board-bridge` | GPL-3.0-or-later | Shared connection engine, terminal launcher, Windows vJoy and Linux uinput output, tare and smoothing. |
 | `balance-board-pair` | GPL-3.0-or-later | Experimental Windows Bluetooth scan, pairing, and HID-service setup tool. |
 
 The split licensing is deliberate: the reusable crates use file-level copyleft
@@ -133,7 +121,7 @@ is GPL-3.0 to keep derivative end-user tools open.
 ## Goals
 
 1. Play Superflight (and other Steam games) using a Wii Balance Board, via
-   the path `Balance Board → Bluetooth HID → vJoy → Steam Input → game`.
+   the path `Balance Board → Bluetooth → bridge → virtual controller → Steam Input → game`.
    Step-by-step guide: [docs/steam-input/superflight.md](docs/steam-input/superflight.md).
 2. Provide a clean, documented Rust crate that other Balance Board projects
    can depend on for parsing, calibration, and center-of-gravity math.

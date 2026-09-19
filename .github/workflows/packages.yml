@@ -1,0 +1,52 @@
+name: Downloadable apps
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, polish/windows-setup]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+      - run: cargo build --release --workspace --locked
+      - name: Windows ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path bundle | Out-Null
+          Copy-Item target/release/*.exe bundle/
+          Copy-Item packaging/windows/* bundle/
+          Copy-Item packaging/QUICKSTART.txt,README.md,LICENSE-* bundle/
+          Copy-Item docs bundle/docs -Recurse
+          Compress-Archive -Path bundle/* -DestinationPath WeBalanceBored-windows-x64.zip
+      - name: Linux archive
+        if: runner.os == 'Linux'
+        run: |
+          mkdir bundle
+          cp target/release/we-balance-bored target/release/balance-board-bridge bundle/
+          cp packaging/linux/* packaging/QUICKSTART.txt README.md LICENSE-* bundle/
+          cp -r docs bundle/
+          chmod +x bundle/*.sh bundle/we-balance-bored bundle/balance-board-bridge
+          tar -czf WeBalanceBored-linux-x64.tar.gz -C bundle .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WeBalanceBored-${{ runner.os }}-x64
+          path: |
+            WeBalanceBored-*.zip
+            WeBalanceBored-*.tar.gz
+          if-no-files-found: error

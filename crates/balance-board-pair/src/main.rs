@@ -1,5 +1,6 @@
 //! `balance-board-pair` — auto-pair the Balance Board on Windows.
 
+#[cfg(windows)]
 use std::time::Duration;
 
 const HELP: &str = "\
@@ -31,9 +32,8 @@ fn main() {
     #[cfg(not(windows))]
     {
         eprintln!(
-            "balance-board-pair is Windows-only. On Linux use bluetoothctl, \
-             on macOS use blueutil — both will pair the board correctly when \
-             SYNC is pressed.\n\nThis stub binary will exit now."
+            "balance-board-pair is the Windows helper. On Linux run \
+             we-balance-bored --pair to use the BlueZ pairing flow."
         );
         std::process::exit(2);
     }
