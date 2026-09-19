@@ -88,6 +88,14 @@ bridge captures your centered stance (tare). Wait for `Streaming` and keep
 this terminal running. Open `joy.cpl` from Windows Run (**Win+R**), select
 vJoy, and check that its X/Y axes move when you lean.
 
+The bridge checks vJoy first, then waits for the board. If sensor reports
+stop for three seconds, it clears the virtual controller and retries the same
+HID device every two seconds. Wake the paired board with **Power**; after
+reconnection it reads fresh calibration and asks you to center your stance
+again. It does not automatically pair or remove devices. If Windows changes
+the HID path after re-pairing, restart the bridge. This recovery behavior still
+needs verification with a physical board.
+
 Once that works, follow the [Superflight setup guide](docs/steam-input/superflight.md).
 Steam recognition and the game mapping are separate checks; a successful
 build or `Streaming` message alone does not prove that they work.

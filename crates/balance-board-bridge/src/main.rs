@@ -21,6 +21,8 @@
 
 use balance_board_io::{BalanceBoardSource, HidApiBoard};
 use balance_board_protocol::{BoardReport, CalibratedSensors, Calibration, LowPass2D};
+use std::ffi::CString;
+use std::time::Duration;
 
 mod cache;
 
@@ -102,12 +104,6 @@ impl Args {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::from_env();
 
-    eprintln!("WeBalanceBored — opening Balance Board...");
-    let mut board = HidApiBoard::open()?;
-
-    let cal_bytes = load_or_read_calibration(&mut board, args.no_cache)?;
-    let cal = Calibration::from_eeprom(&cal_bytes)?;
-
     #[cfg(windows)]
     let mut vjoy = {
         eprintln!("Acquiring vJoy device {VJOY_DEVICE_ID}...");
@@ -116,64 +112,115 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(windows))]
     eprintln!("(non-Windows build — vJoy disabled, running in print-only mode)");
 
-    let (tare_x, tare_y) = if args.no_tare {
-        eprintln!("Tare skipped (--no-tare).");
-        (0.0, 0.0)
-    } else {
-        let (tx, ty) = capture_tare(&mut board, &cal)?;
-        eprintln!("Tare captured: cog_x={tx:+.3} cog_y={ty:+.3}");
-        (tx, ty)
-    };
+    eprintln!("WeBalanceBored — waiting for Balance Board. Wake it with Power. Ctrl+C to stop.");
+    let mut selected_path: Option<CString> = None;
+    let mut reconnecting = false;
+    'connection: loop {
+        let opened = match selected_path.as_ref() {
+            Some(path) => HidApiBoard::open_path(path),
+            None => HidApiBoard::open(),
+        };
+        let mut board = match opened {
+            Ok(board) => board,
+            Err(error) => {
+                wait_to_retry(&error);
+                continue;
+            }
+        };
+        selected_path = Some(board.path().to_owned());
+        let fresh_calibration = args.no_cache || reconnecting;
+        reconnecting = true;
 
-    // Alpha = 1.0 is mathematical passthrough — the filter compiles away
-    // to "return input unchanged" without a separate code path.
-    let alpha = if args.no_smooth { 1.0 } else { COG_ALPHA };
-    let mut filter = LowPass2D::new(alpha);
+        let cal_bytes = match load_or_read_calibration(&mut board, fresh_calibration) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                drop(board);
+                wait_to_retry(error.as_ref());
+                continue;
+            }
+        };
+        let cal = Calibration::from_eeprom(&cal_bytes)?;
 
-    eprintln!("\nStreaming. Ctrl-C to stop.");
-    let mut frame: u64 = 0;
-    loop {
-        let report = board.next_report()?;
-        let processed = process_report(&report, &cal, (tare_x, tare_y), &mut filter);
-        frame = frame.wrapping_add(1);
-
-        if args.verbose && frame % VERBOSE_EVERY_FRAMES == 0 {
-            eprintln!(
-                "kg={:>5.1}  cog=({:+.2},{:+.2})  btn={}",
-                processed.total_kg,
-                processed.cog_x,
-                processed.cog_y,
-                if processed.button { "DOWN" } else { "  up" },
-            );
-        }
-
-        #[cfg(windows)]
-        {
-            vjoy.set_axis_normalized(VJoyAxis::X, processed.cog_x);
-            vjoy.set_axis_normalized(VJoyAxis::Y, processed.cog_y);
-            vjoy.set_axis_normalized(VJoyAxis::Z, processed.corner_axes[0]);
-            vjoy.set_axis_normalized(VJoyAxis::Rx, processed.corner_axes[1]);
-            vjoy.set_axis_normalized(VJoyAxis::Ry, processed.corner_axes[2]);
-            vjoy.set_axis_normalized(VJoyAxis::Rz, processed.corner_axes[3]);
-            // The board's front-edge SYNC button surfaces as vJoy
-            // button 1; Steam Input can bind it to anything.
-            vjoy.set_button(1, processed.button);
-        }
-
-        #[cfg(not(windows))]
-        {
-            let tag = if processed.cog_loaded {
-                ""
-            } else {
-                " (unloaded)"
+        let (tare_x, tare_y) = if args.no_tare {
+            eprintln!("Tare skipped (--no-tare).");
+            (0.0, 0.0)
+        } else {
+            let (tx, ty) = match capture_tare(&mut board, &cal) {
+                Ok(tare) => tare,
+                Err(error) => {
+                    drop(board);
+                    wait_to_retry(error.as_ref());
+                    continue;
+                }
             };
-            let btn = if processed.button { " btn" } else { "" };
-            println!(
-                "kg={:.1} x={:+.2} y={:+.2}{tag}{btn}",
-                processed.total_kg, processed.cog_x, processed.cog_y
-            );
+            eprintln!("Tare captured: cog_x={tx:+.3} cog_y={ty:+.3}");
+            (tx, ty)
+        };
+
+        // Alpha = 1.0 is mathematical passthrough — the filter compiles away
+        // to "return input unchanged" without a separate code path.
+        let alpha = if args.no_smooth { 1.0 } else { COG_ALPHA };
+        let mut filter = LowPass2D::new(alpha);
+
+        eprintln!("\nStreaming. Ctrl-C to stop.");
+        let mut frame: u64 = 0;
+        loop {
+            let report = match board.next_report() {
+                Ok(report) => report,
+                Err(error) => {
+                    #[cfg(windows)]
+                    vjoy.neutralize()?;
+                    drop(board);
+                    wait_to_retry(&error);
+                    continue 'connection;
+                }
+            };
+            let processed = process_report(&report, &cal, (tare_x, tare_y), &mut filter);
+            frame = frame.wrapping_add(1);
+
+            if args.verbose && frame % VERBOSE_EVERY_FRAMES == 0 {
+                eprintln!(
+                    "kg={:>5.1}  cog=({:+.2},{:+.2})  btn={}",
+                    processed.total_kg,
+                    processed.cog_x,
+                    processed.cog_y,
+                    if processed.button { "DOWN" } else { "  up" },
+                );
+            }
+
+            #[cfg(windows)]
+            {
+                vjoy.set_axis_normalized(VJoyAxis::X, processed.cog_x)?;
+                vjoy.set_axis_normalized(VJoyAxis::Y, processed.cog_y)?;
+                vjoy.set_axis_normalized(VJoyAxis::Z, processed.corner_axes[0])?;
+                vjoy.set_axis_normalized(VJoyAxis::Rx, processed.corner_axes[1])?;
+                vjoy.set_axis_normalized(VJoyAxis::Ry, processed.corner_axes[2])?;
+                vjoy.set_axis_normalized(VJoyAxis::Rz, processed.corner_axes[3])?;
+                // The board's front-edge SYNC button surfaces as vJoy
+                // button 1; Steam Input can bind it to anything.
+                vjoy.set_button(1, processed.button)?;
+            }
+
+            #[cfg(not(windows))]
+            {
+                let tag = if processed.cog_loaded {
+                    ""
+                } else {
+                    " (unloaded)"
+                };
+                let btn = if processed.button { " btn" } else { "" };
+                println!(
+                    "kg={:.1} x={:+.2} y={:+.2}{tag}{btn}",
+                    processed.total_kg, processed.cog_x, processed.cog_y
+                );
+            }
         }
     }
+}
+
+fn wait_to_retry(error: &dyn std::error::Error) {
+    eprintln!("Board unavailable: {error}\nWake the paired board with Power. Retrying in 2s; Ctrl+C to stop.");
+    std::thread::sleep(Duration::from_secs(2));
 }
 
 /// Result of running one [`BoardReport`] through the bridge's

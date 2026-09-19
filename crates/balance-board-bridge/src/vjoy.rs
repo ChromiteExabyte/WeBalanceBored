@@ -168,30 +168,52 @@ impl VJoyDevice {
                     "could not acquire vJoy device {id} — already in use, or not configured"
                 )));
             }
-            (api.reset)(id);
         }
-        Ok(VJoyDevice { id, api })
+        let mut device = VJoyDevice { id, api };
+        device.neutralize()?;
+        Ok(device)
     }
 
     /// Set an axis from a normalized `[-1.0, +1.0]` value. Out-of-range
     /// inputs are clamped. `0.0` corresponds to vJoy's axis center.
-    pub fn set_axis_normalized(&mut self, axis: VJoyAxis, value: f32) {
+    pub fn set_axis_normalized(&mut self, axis: VJoyAxis, value: f32) -> io::Result<()> {
         let v = value.clamp(-1.0, 1.0);
         let span = (AXIS_MAX - AXIS_MIN) as f32;
         let scaled = ((v + 1.0) * 0.5 * span) as i32 + AXIS_MIN;
         // SAFETY: see `acquire`. `axis as u32` is one of the documented
         // HID Usage Page 0x01 generic-desktop axis IDs.
-        unsafe {
-            (self.api.set_axis)(scaled, self.id, axis as u32);
+        if unsafe { (self.api.set_axis)(scaled, self.id, axis as u32) } == 0 {
+            return Err(io::Error::other(format!(
+                "vJoy device {} rejected axis {axis:?}. Enable X/Y/Z/Rx/Ry/Rz in Configure vJoy.",
+                self.id
+            )));
         }
+        Ok(())
     }
 
     /// Set a button (1-indexed). vJoy supports up to 128 buttons.
-    pub fn set_button(&mut self, btn: u8, pressed: bool) {
+    pub fn set_button(&mut self, btn: u8, pressed: bool) -> io::Result<()> {
         // SAFETY: see `acquire`.
-        unsafe {
-            (self.api.set_btn)(i32::from(pressed), self.id, btn);
+        if unsafe { (self.api.set_btn)(i32::from(pressed), self.id, btn) } == 0 {
+            return Err(io::Error::other(format!(
+                "vJoy device {} rejected button {btn}. Enable at least one button in Configure vJoy.", self.id
+            )));
         }
+        Ok(())
+    }
+
+    /// Clear held input before waiting for a disconnected board to return.
+    pub fn neutralize(&mut self) -> io::Result<()> {
+        // SAFETY: this device is acquired and the function pointer is live.
+        if unsafe { (self.api.reset)(self.id) } == 0 {
+            return Err(io::Error::other("vJoy could not reset the controller"));
+        }
+        self.set_axis_normalized(VJoyAxis::X, 0.0)?;
+        self.set_axis_normalized(VJoyAxis::Y, 0.0)?;
+        for axis in [VJoyAxis::Z, VJoyAxis::Rx, VJoyAxis::Ry, VJoyAxis::Rz] {
+            self.set_axis_normalized(axis, -1.0)?;
+        }
+        self.set_button(1, false)
     }
 }
 
@@ -200,6 +222,7 @@ impl Drop for VJoyDevice {
         // SAFETY: paired with the successful `AcquireVJD` in `acquire`.
         // `api` outlives this Drop because we own it.
         unsafe {
+            (self.api.reset)(self.id);
             (self.api.relinquish)(self.id);
         }
     }

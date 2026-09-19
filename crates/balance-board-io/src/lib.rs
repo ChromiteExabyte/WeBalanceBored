@@ -48,6 +48,9 @@ pub trait BalanceBoardSource {
     /// # Errors
     /// Returns an [`io::Error`] if the underlying transport fails (device
     /// unplugged, Bluetooth dropped, OS-level read error, etc.).
+    /// [`HidApiBoard`] returns [`io::ErrorKind::TimedOut`] when no valid
+    /// sensor report arrives within three seconds, even if status reports
+    /// continue arriving.
     fn next_report(&mut self) -> io::Result<BoardReport>;
 
     /// Read the 24-byte EEPROM calibration block from the board.

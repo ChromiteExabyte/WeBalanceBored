@@ -7,6 +7,17 @@ once it leaves the 0.x series.
 
 ## [Unreleased]
 
+### Connection reliability
+- Pairing refreshes the Windows device record before checking authentication,
+  avoiding unnecessary authentication of an already-paired board. Corrected
+  contradictory PIN diagnostics; the existing PIN algorithm is unchanged.
+- Sensor reads time out after three seconds without a valid sensor report.
+- The bridge waits for the board and retries connection failures. It clears
+  vJoy input on a sensor failure, reconnects to the same HID path, and rereads
+  calibration and tare. Physical-board recovery testing remains outstanding.
+- vJoy setup, axis, and button failures now produce errors. Acquisition checks
+  the required axes/button, and normal release resets controller state.
+
 ### Added
 - Windows first-run walkthrough and `docs/troubleshooting.md`, with separate
   checks for pairing, HID discovery, live sensors, vJoy, and Steam.

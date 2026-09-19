@@ -43,6 +43,7 @@ const REPORTING_MODE_BB: u8 = 0x32;
 /// A Balance Board accessed through `hidapi`.
 pub struct HidApiBoard {
     device: HidDevice,
+    path: CString,
     /// Kept alive for the lifetime of the device. hidapi-rs's global state
     /// is reference-counted; holding the context defensively avoids any
     /// teardown surprises if the user opens multiple boards.
@@ -122,7 +123,11 @@ impl HidApiBoard {
         let device = api.open_path(&path).map_err(io_err)?;
         device.set_blocking_mode(true).map_err(io_err)?;
 
-        let mut board = Self { _api: api, device };
+        let mut board = Self {
+            _api: api,
+            device,
+            path,
+        };
         board.disable_extension_encryption()?;
         board.set_reporting_mode(REPORTING_MODE_BB)?;
         Ok(board)
@@ -136,10 +141,19 @@ impl HidApiBoard {
         let api = HidApi::new().map_err(io_err)?;
         let device = api.open_path(path).map_err(io_err)?;
         device.set_blocking_mode(true).map_err(io_err)?;
-        let mut board = Self { _api: api, device };
+        let mut board = Self {
+            _api: api,
+            device,
+            path: path.to_owned(),
+        };
         board.disable_extension_encryption()?;
         board.set_reporting_mode(REPORTING_MODE_BB)?;
         Ok(board)
+    }
+
+    /// The selected HID path, for reconnecting to the same device.
+    pub fn path(&self) -> &CString {
+        &self.path
     }
 
     fn disable_extension_encryption(&mut self) -> io::Result<()> {
@@ -224,19 +238,10 @@ impl HidApiBoard {
 
 impl BalanceBoardSource for HidApiBoard {
     fn next_report(&mut self) -> io::Result<BoardReport> {
-        let mut buf = [0u8; 32];
-        loop {
-            let n = self.device.read(&mut buf).map_err(io_err)?;
-            if n == 0 {
-                continue;
-            }
-            // Skip anything that isn't a recognized sensor report —
-            // status reports (0x20) and read responses (0x21) interleave
-            // with the data stream and don't carry sensor values.
-            if let Ok(report) = parse_report(&buf[..n]) {
-                return Ok(report);
-            }
-        }
+        read_sensor_report(
+            |buf, timeout_ms| self.device.read_timeout(buf, timeout_ms).map_err(io_err),
+            Duration::from_secs(3),
+        )
     }
 
     fn read_calibration_block(&mut self) -> io::Result<[u8; 24]> {
@@ -250,6 +255,87 @@ impl BalanceBoardSource for HidApiBoard {
     }
 }
 
+fn read_sensor_report(
+    mut read: impl FnMut(&mut [u8], i32) -> io::Result<usize>,
+    timeout: Duration,
+) -> io::Result<BoardReport> {
+    let deadline = std::time::Instant::now() + timeout;
+    let mut buf = [0u8; 32];
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(io::Error::new(io::ErrorKind::TimedOut,
+                    "No valid sensor report before the deadline. The board may be asleep or disconnected."));
+        }
+        let timeout_ms = remaining.as_millis().clamp(1, 250) as i32;
+        let n = read(&mut buf, timeout_ms)?;
+        if n == 0 {
+            continue;
+        }
+        // Skip anything that isn't a recognized sensor report —
+        // status reports (0x20) and read responses (0x21) interleave
+        // with the data stream and don't carry sensor values.
+        if let Ok(report) = parse_report(&buf[..n]) {
+            return Ok(report);
+        }
+    }
+}
+
 fn io_err<E: std::fmt::Display>(e: E) -> io::Error {
     io::Error::other(e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn skips_status_and_malformed_reports_before_sensor_data() {
+        let mut frames = vec![
+            vec![0x20, 0, 0],
+            vec![0x32],
+            vec![0x32, 0, 0, 0, 1, 0, 2, 0, 3, 0, 4],
+        ]
+        .into_iter();
+        let report = read_sensor_report(
+            |buf, _| {
+                let frame = frames.next().expect("should stop at the sensor report");
+                buf[..frame.len()].copy_from_slice(&frame);
+                Ok(frame.len())
+            },
+            Duration::from_secs(1),
+        )
+        .unwrap();
+        assert_eq!(report.sensors.top_right, 1);
+        assert_eq!(report.sensors.bottom_left, 4);
+    }
+
+    #[test]
+    fn unrelated_reports_do_not_extend_deadline() {
+        let error = read_sensor_report(
+            |buf, _| {
+                buf[0] = 0x20;
+                Ok(1)
+            },
+            Duration::from_millis(10),
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn empty_reads_time_out() {
+        let error = read_sensor_report(|_, _| Ok(0), Duration::from_millis(10)).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn transport_failure_is_preserved() {
+        let error = read_sensor_report(
+            |_, _| Err(io::ErrorKind::BrokenPipe.into()),
+            Duration::from_secs(1),
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+    }
 }

@@ -145,11 +145,21 @@ pub fn pair_first(timeout: Duration) -> io::Result<PairResult> {
 
     let radio = LocalRadio::open()?;
     eprintln!(
-        "[pair] local Bluetooth radio MAC: {} (this is the PIN we'll send for SYNC pairing)",
+        "[pair] local Bluetooth radio MAC: {}",
         crate::pin::format_bd_addr(radio.address)
     );
 
     let mut info = info_for_address(board.address);
+    // Refresh the discovered device on the radio used for authentication.
+    // A newly initialized address-only structure has fAuthenticated == 0.
+    // https://learn.microsoft.com/en-us/windows/win32/api/bluetoothapis/nf-bluetoothapis-bluetoothgetdeviceinfo
+    // SAFETY: radio is live; info has its required size and remote address.
+    let rc = unsafe { BluetoothGetDeviceInfo(radio.handle, &mut info) };
+    if rc != ERROR_SUCCESS {
+        return Err(io::Error::other(format!(
+            "BluetoothGetDeviceInfo failed: os error {rc}"
+        )));
+    }
     let already_paired = info.fAuthenticated != 0;
 
     if !already_paired {
@@ -164,17 +174,13 @@ pub fn pair_first(timeout: Duration) -> io::Result<PairResult> {
     })
 }
 
-/// RAII handle to the local Bluetooth radio. We need this for two
-/// reasons:
-///
-/// 1. `BluetoothAuthenticateDeviceEx` and `BluetoothSendAuthenticationResponseEx`
+/// RAII handle to the local Bluetooth radio.
+/// `BluetoothAuthenticateDeviceEx` and `BluetoothSendAuthenticationResponseEx`
 ///    work much more reliably with an explicit radio handle than with
 ///    `NULL` ("any radio") — passing NULL was producing
 ///    `ERROR_GEN_FAILURE` on Carter's setup.
-/// 2. The Wii's SYNC-button pairing protocol uses the **host's**
-///    Bluetooth radio MAC (in rgBytes / little-endian order) as the
-///    PIN, not the device's own MAC. So we need to know our own
-///    radio's address to derive the right PIN.
+/// The radio address is logged for diagnostics; PIN derivation is handled
+/// separately in `authenticate` using the remote device address.
 struct LocalRadio {
     handle: HANDLE,
     address: [u8; 6],

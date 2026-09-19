@@ -55,6 +55,18 @@ removing a working pairing before collecting the HID diagnostic.
 
 ## Discovery succeeds, but calibration or streaming fails
 
+The bridge now retries board discovery, calibration transport failures, and
+sensor-read failures. No valid sensor data for three seconds counts as a
+timeout, including when unrelated HID reports keep arriving. On a streaming
+failure it clears vJoy input before waiting, then reopens the same HID path,
+reads fresh calibration, and captures a new centered stance. Wake the board
+with **Power**. Use **Ctrl+C** to stop retrying. If you re-pair the board and
+Windows assigns a new HID path, restart the bridge to discover it again.
+
+vJoy setup/output errors stop the bridge with an error instead of silently
+continuing. The initial vJoy check also verifies the six required axes and
+button 1, before waiting for the board.
+
 Run the sensor example independently of vJoy:
 
 ```pwsh
