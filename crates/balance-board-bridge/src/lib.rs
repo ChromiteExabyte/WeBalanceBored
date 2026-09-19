@@ -125,11 +125,11 @@ fn run_engine(
 ) -> io::Result<()> {
     let mut identity = None;
     let result = (|| {
+        status(Status::message(
+            Phase::Waiting,
+            "Looking for your board. Press Power if it is already paired. Retrying automatically; Ctrl+C to stop.",
+        ));
         while !control.stopped() {
-            status(Status::message(
-                Phase::Waiting,
-                "Looking for your board. Press Power if it is already paired.",
-            ));
             let mut board = match open(identity.as_deref(), config.no_cache || identity.is_some()) {
                 Ok(board) => board,
                 Err(error) => {
