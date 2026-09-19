@@ -7,6 +7,15 @@ once it leaves the 0.x series.
 
 ## [Unreleased]
 
+### Calibration response correction
+- Fixed reversed size/error nibbles in Windows register-read responses. A
+  successful 16-byte calibration chunk was incorrectly reported as error 0xF,
+  preventing live weight after successful pairing.
+- Added literal wire-format regression fixtures for the 24-byte calibration
+  response and corrected the error-response fixture.
+- Verified calibration and continuous live sensor readings on the paired
+  Windows board. Loaded weight accuracy and controller output remain unverified.
+
 ### Windows SYNC pairing correction
 - Replaced the callback-based authentication path with direct legacy PIN
   authentication using the local radio address for red SYNC, following the
@@ -16,7 +25,8 @@ once it leaves the 0.x series.
   inquiry and HID activation. Timeout 258 gets a specific diagnostic rather
   than being treated as evidence of a rejected PIN.
 - Added tests for wide PIN encoding, embedded zero/high bytes, and timeout
-  classification. Hardware success remains to be verified.
+  classification. Windows pairing and HID activation succeeded on the user's
+  physical board; live sensor streaming also passed after the parser correction.
 
 ### Windows and Linux terminal launcher
 - Added `we-balance-bored`: menu options for live weight, controller mode,

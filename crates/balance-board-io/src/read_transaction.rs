@@ -9,7 +9,7 @@
 //!
 //! - WiiBrew Wiimote — Read Memory and Registers (`0x17` request, `0x21`
 //!   response): <https://wiibrew.org/wiki/Wiimote#Reading_and_Writing>
-//! - Cross-checked against jloehr/HID-Wiimote's `ProcessRegisterReadReport`.
+//! - Linux `hid-wiimote-core.c`, `handler_data`.
 
 use std::io;
 
@@ -52,7 +52,7 @@ impl ReadTransaction {
     /// |--------|--------|----------------------------------------------|
     /// | 0      | 1      | Report ID (`0x21`)                           |
     /// | 1..=2  | 2      | Core button state (ignored here)             |
-    /// | 3      | 1      | High nibble = error, low nibble = size − 1   |
+    /// | 3      | 1      | High nibble = size − 1, low nibble = error   |
     /// | 4..=5  | 2      | Source address, low 16 bits, big-endian      |
     /// | 6..=21 | 16     | Payload (`size` valid bytes, rest zero pad)  |
     pub fn consume(&mut self, frame: &[u8]) -> io::Result<()> {
@@ -63,8 +63,8 @@ impl ReadTransaction {
             ));
         }
         let err_size = frame[3];
-        let err = err_size >> 4;
-        let size = (err_size & 0x0F) as usize + 1;
+        let err = err_size & 0x0F;
+        let size = (err_size >> 4) as usize + 1;
         if err != 0 {
             return Err(io::Error::other(format!(
                 "Wiimote register-read error code 0x{err:x}"
@@ -95,10 +95,35 @@ mod tests {
         let mut f = vec![0u8; 22];
         f[0] = 0x21;
         // err=0, size = payload.len() - 1
-        f[3] = ((payload.len() - 1) & 0x0F) as u8;
+        f[3] = ((payload.len() - 1) as u8) << 4;
         f[4..6].copy_from_slice(&addr_low.to_be_bytes());
         f[6..6 + payload.len()].copy_from_slice(payload);
         f
+    }
+
+    #[test]
+    fn decodes_literal_calibration_responses() {
+        // Wire-format fixtures independent of the frame helper: 0xF0 means
+        // 16 successful bytes, and 0x70 means 8 successful bytes, not errors.
+        let first = [
+            0x21, 0, 0, 0xF0, 0, 0x24, 3, 232, 3, 232, 3, 232, 3, 232, 7, 208, 7, 208, 7, 208, 7,
+            208,
+        ];
+        let second = [
+            0x21, 0, 0, 0x70, 0, 0x34, 11, 184, 11, 184, 11, 184, 11, 184, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let mut tx = ReadTransaction::new(0x00A4_0024, 24);
+        tx.consume(&first).unwrap();
+        assert!(!tx.is_complete());
+        tx.consume(&second).unwrap();
+        assert!(tx.is_complete());
+        assert_eq!(
+            tx.into_bytes(),
+            [
+                3, 232, 3, 232, 3, 232, 3, 232, 7, 208, 7, 208, 7, 208, 7, 208, 11, 184, 11, 184,
+                11, 184, 11, 184,
+            ]
+        );
     }
 
     #[test]
@@ -148,7 +173,7 @@ mod tests {
         let mut tx = ReadTransaction::new(0, 8);
         let mut bad = vec![0u8; 22];
         bad[0] = 0x21;
-        bad[3] = 0x70; // err=7, size=1
+        bad[3] = 0x07; // err=7, size=1
         let err = tx.consume(&bad).unwrap_err();
         assert!(err.to_string().contains("0x7"));
     }
