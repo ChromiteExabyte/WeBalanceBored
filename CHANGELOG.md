@@ -7,6 +7,15 @@ once it leaves the 0.x series.
 
 ## [Unreleased]
 
+### Button weight zeroing
+- Tap and release the front button with the board empty to zero the weight
+  on Windows and Linux. Wait for settling, then average each corner for one
+  second and subtract that baseline from subsequent readings.
+- Confirm zeroing in the terminal. Pause game output while measuring and
+  recapture stance afterwards; reserve the front button for zeroing.
+- Baselines last until disconnect/restart. Tests cover held-button pressure,
+  settling, corrected loads, repeated zeroing, and nonnegative output.
+
 ### Calibration response correction
 - Fixed reversed size/error nibbles in Windows register-read responses. A
   successful 16-byte calibration chunk was incorrectly reported as error 0xF,

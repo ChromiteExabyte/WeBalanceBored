@@ -9,6 +9,7 @@ mod processing;
 mod tests;
 #[cfg(windows)]
 mod vjoy;
+mod zero;
 
 use balance_board_protocol::{CalibratedSensors, LowPass2D};
 use std::io;
@@ -140,6 +141,7 @@ fn run_engine(
             };
             identity = Some(board.identity());
             let mut tare = Tare::new(!config.no_tare);
+            let mut weight_zero = zero::WeightZero::default();
             let mut filter = LowPass2D::new(if config.no_smooth { 1.0 } else { 0.4 });
             let mut last_sample = Instant::now();
             while !control.stopped() {
@@ -170,17 +172,35 @@ fn run_engine(
                     }
                 };
                 last_sample = Instant::now();
+                let (weights, zeroed) =
+                    weight_zero.observe(sample.weights, sample.button, last_sample);
+                if zeroed {
+                    tare = Tare::new(!config.no_tare);
+                    filter.reset();
+                }
+                if weight_zero.pending() {
+                    if let Some(output) = output.as_mut() {
+                        output.neutralize()?;
+                    }
+                    status(Status::message(
+                        Phase::Centering,
+                        "Zeroing weight — leave the board empty and release the button.",
+                    ));
+                    continue;
+                }
+                if zeroed {
+                    status(Status::message(
+                        Phase::Live,
+                        "Weight zeroed. You can step onto the board.",
+                    ));
+                }
                 let was_centering = tare.remaining > 0;
-                let ready = tare.observe(sample.weights);
+                let ready = tare.observe(weights);
                 if ready && was_centering {
                     filter.reset();
                 }
-                let processed = processing::process_weights(
-                    sample.weights,
-                    sample.button,
-                    tare.offset,
-                    &mut filter,
-                );
+                let processed =
+                    processing::process_weights(weights, false, tare.offset, &mut filter);
                 if ready {
                     if let Some(output) = output.as_mut() {
                         output.send(&processed)?;
@@ -198,10 +218,10 @@ fn run_engine(
                     .into(),
                     total_kg: processed.total_kg,
                     corners: [
-                        sample.weights.top_right,
-                        sample.weights.bottom_right,
-                        sample.weights.top_left,
-                        sample.weights.bottom_left,
+                        weights.top_right,
+                        weights.bottom_right,
+                        weights.top_left,
+                        weights.bottom_left,
                     ],
                     lean: if ready {
                         [processed.cog_x, processed.cog_y]

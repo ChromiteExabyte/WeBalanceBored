@@ -41,6 +41,13 @@ For daily use, wake the paired board with its front **Power** button and choose
 connection is retried automatically. Keep only the intended board connected
 when starting; reconnection stays with the selected device.
 
+To zero an unloaded reading, **leave the board empty and tap/release the front
+Power button while connected**. Keep it empty until **Weight zeroed** appears
+(about 1.5 seconds after release). This averages a fresh baseline for each
+corner on Windows and Linux. Repeat whenever needed; reconnecting or restarting
+clears the baseline. The button is reserved for zeroing, including in controller
+mode, where output pauses during zeroing and your stance is measured again.
+
 ### Windows game setup — once
 
 Install [vJoy](https://github.com/jshafer817/vJoy/releases). In **Configure vJoy**,

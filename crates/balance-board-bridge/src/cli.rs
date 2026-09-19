@@ -79,7 +79,7 @@ pub fn main(launcher: bool) -> io::Result<()> {
         config.no_tare = true;
     }
     println!(
-        "\n{}\nWake a paired board with Power. Ctrl+C to disconnect.\n",
+        "\n{}\nWake a paired board with Power. Ctrl+C to disconnect.\nTo zero weight: leave the board empty, tap and release its front button, then wait for confirmation.\n",
         if config.gamepad {
             "Controller mode — stand centered when connected."
         } else {
