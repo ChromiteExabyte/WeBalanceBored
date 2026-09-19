@@ -7,6 +7,17 @@ once it leaves the 0.x series.
 
 ## [Unreleased]
 
+### Windows SYNC pairing correction
+- Replaced the callback-based authentication path with direct legacy PIN
+  authentication using the local radio address for red SYNC, following the
+  approach used by Dolphin and BlueZ. The previous device-address PIN was
+  not appropriate for this pairing mode.
+- Discovery and authentication now use the same radio, followed by a service
+  inquiry and HID activation. Timeout 258 gets a specific diagnostic rather
+  than being treated as evidence of a rejected PIN.
+- Added tests for wide PIN encoding, embedded zero/high bytes, and timeout
+  classification. Hardware success remains to be verified.
+
 ### Windows and Linux terminal launcher
 - Added `we-balance-bored`: menu options for live weight, controller mode,
   pairing, and setup checks. Monitor mode needs no virtual-controller driver.
@@ -87,7 +98,7 @@ once it leaves the 0.x series.
   BTHENUM PnP ID).
 
 ### Not yet hardware-verified
-- The pairing handshake itself (PIN delivery via `BluetoothSendAuthenticationResponseEx`).
+- The revised Windows SYNC pairing handshake (direct `BluetoothAuthenticateDevice`).
 - The full bridge end-to-end pipeline (board → vJoy → Steam Input → game).
 
 <!-- last touched: 2026-05-13 -->

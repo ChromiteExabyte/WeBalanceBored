@@ -5,8 +5,8 @@
 //! sensor stream and EEPROM calibration data via [`BalanceBoardSource`].
 //!
 //! Bluetooth pairing is out of scope — pair the board through your OS's
-//! Bluetooth UI before running. The board's PIN is its own Bluetooth MAC
-//! address with the bytes reversed; see WiiBrew for details.
+//! pairing flow before running. The launcher provides a Pair action for
+//! Windows and Linux; red SYNC pairing needs a special binary PIN.
 //!
 //! # Example
 //!

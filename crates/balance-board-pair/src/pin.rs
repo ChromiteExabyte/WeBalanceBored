@@ -1,50 +1,36 @@
-//! Wii Balance Board pairing-PIN derivation.
+//! Wii binary PIN encoding. Red SYNC pairing uses the local Bluetooth radio's
+//! address, in Win32 rgBytes order. Wii Remote 1+2 pairing uses a different
+//! address convention and is not the Balance Board pairing flow here.
 //!
-//! Wii devices use an unusual pairing scheme. Instead of a numeric PIN
-//! the user types, the PIN *is* the device's own Bluetooth address —
-//! 6 raw bytes — used as a binary passkey.
-//!
-//! Crucially, the Win32 `BLUETOOTH_ADDRESS.rgBytes` field already
-//! stores the address in the byte order WiiBrew describes as "reversed
-//! BD_ADDR." On a little-endian Windows host, `rgBytes[0]` is the
-//! least-significant byte — which is the "first" byte of the PIN as
-//! the board expects it. So the derivation is just: pass the rgBytes
-//! array through unchanged.
-//!
-//! This module exists primarily to:
-//! 1. Encode the convention as a typed function (`wii_pin_for_address`).
-//! 2. Provide a readable formatter for diagnostic output.
-//! 3. Hold the unit tests that pin (heh) the convention so future
-//!    refactors don't accidentally swap byte order.
+//! References:
+//! <https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/Core/HW/WiimoteReal/IOWin.cpp>
+//! <https://github.com/bluez/bluez/blob/master/plugins/autopair.c>
 
 /// Length of a Wii pairing PIN, in bytes. Equal to the Bluetooth
 /// address length.
 pub const WII_PIN_LEN: usize = 6;
 
-/// Compute the binary PIN to send when pairing with a Wii device.
-///
-/// Per WiiBrew + the original WiiBalanceWalker + hardware testing:
-/// the PIN is the **device's own** Bluetooth address (Wiimote or
-/// Balance Board), in Win32 rgBytes order (little-endian, equivalent
-/// to "BD_ADDR reversed" if you read addresses big-endian like
-/// most Bluetooth UIs do).
-///
-/// (Older WiiBrew text suggests the host MAC for SYNC pairing.
-/// On Carter's Windows machine that caused
-/// `BluetoothSendAuthenticationResponseEx` to hang waiting for a
-/// device acknowledgment that never came; switching to the device's
-/// own MAC matches what the original 32feet.NET-based WiiBalanceWalker
-/// did and what other Wii pairing tools use.)
-///
-/// Input: a Bluetooth address as exposed by Win32
-/// (`BLUETOOTH_ADDRESS.Anonymous.rgBytes`), already in little-endian
-/// byte order.
-///
-/// Output: 6 bytes ready to feed straight into
-/// `BLUETOOTH_AUTHENTICATE_RESPONSE.pinInfo.pin[..6]`.
+/// Preserve a Bluetooth address supplied in Win32 rgBytes order as PIN bytes.
+/// The caller must select the address appropriate to the pairing mode:
+/// the local radio address for red SYNC, not the remote board address.
 #[must_use]
 pub fn wii_pin_for_address(rg_bytes: [u8; 6]) -> [u8; WII_PIN_LEN] {
     rg_bytes
+}
+
+/// Encode the local radio address for Windows' direct legacy authentication.
+/// Each byte occupies its own WCHAR; an extra NUL terminates the buffer.
+/// Always pass WII_PIN_LEN (6) as the explicit length, including embedded zeros.
+#[must_use]
+pub fn sync_passkey(local_radio_address: [u8; WII_PIN_LEN]) -> [u16; WII_PIN_LEN + 1] {
+    let mut wide = [0; WII_PIN_LEN + 1];
+    for (slot, byte) in wide
+        .iter_mut()
+        .zip(wii_pin_for_address(local_radio_address))
+    {
+        *slot = u16::from(byte);
+    }
+    wide
 }
 
 /// Format a PIN as colon-separated uppercase hex (e.g.
@@ -84,8 +70,7 @@ mod tests {
 
     #[test]
     fn pin_is_rg_bytes_unchanged() {
-        // Carter's board (from the Get-PnpDevice output in the bug
-        // report): BTHENUM\DEV_002659312FA7
+        // Address-byte conversion only; pairing chooses the local radio.
         // Big-endian display: 00:26:59:31:2F:A7
         // Win32 rgBytes (little-endian): A7, 2F, 31, 59, 26, 00
         let rg = [0xA7, 0x2F, 0x31, 0x59, 0x26, 0x00];
@@ -104,6 +89,18 @@ mod tests {
         // Same address as above; UI should show the conventional form.
         let rg = [0xA7, 0x2F, 0x31, 0x59, 0x26, 0x00];
         assert_eq!(format_bd_addr(rg), "00:26:59:31:2F:A7");
+    }
+
+    #[test]
+    fn legacy_passkey_preserves_zero_and_high_bytes_without_packing() {
+        assert_eq!(
+            sync_passkey([0x04, 0xb1, 0x9e, 0xef, 0xdc, 0xb0]),
+            [0x04, 0xb1, 0x9e, 0xef, 0xdc, 0xb0, 0]
+        );
+        assert_eq!(
+            sync_passkey([0, 1, 0x80, 0xff, 0, 6]),
+            [0, 1, 0x80, 0xff, 0, 6, 0]
+        );
     }
 
     #[test]

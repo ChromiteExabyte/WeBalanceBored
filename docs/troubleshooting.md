@@ -13,6 +13,23 @@ vJoy, then Steam. Stop at the first stage that fails.
 
 ## Windows says paired, but the app cannot find the board
 
+### Pairing returns 258
+
+`258` is a Windows wait timeout. It is not proof that the board rejected a PIN.
+Earlier builds used `BluetoothAuthenticateDeviceEx` and could time out without
+ever entering the authentication callback. The current helper supplies the
+local radio's binary SYNC PIN directly via `BluetoothAuthenticateDevice`,
+following [Dolphin's Windows pairing flow](https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/Core/HW/WiimoteReal/IOWin.cpp).
+It also uses the same adapter for discovery and pairing.
+
+Press red **SYNC** immediately before retrying option 3. Look for
+`direct legacy API` in the output to identify the updated helper. If it still
+times out, keep the complete output; a cached discovery result does not prove
+that the board is still awake. Keep the board nearby and close other Wii
+connection tools. Do not repeatedly remove every pairing record.
+
+### Paired, but unavailable to the app
+
 Windows pairing records, PnP device status, and the HID interfaces available
 to `hidapi` are different observations. A PnP status of `OK` is useful evidence,
 but does not prove the app can open the device or receive reports. A Windows

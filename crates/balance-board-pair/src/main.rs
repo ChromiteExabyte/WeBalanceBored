@@ -47,7 +47,7 @@ fn main() {
 
 #[cfg(windows)]
 fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    use balance_board_pair::pin::{format_bd_addr, format_pin, wii_pin_for_address};
+    use balance_board_pair::pin::format_bd_addr;
     use balance_board_pair::{forget_all_balance_boards, pair_first, scan};
 
     if args.iter().any(|a| a == "--scan") {
@@ -57,16 +57,12 @@ fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             println!("No Wii-family devices found nearby.");
             return Ok(());
         }
-        println!(
-            "{:<24}  {:<17}  {:<17}  paired  conn  remem",
-            "name", "address", "wii pin"
-        );
+        println!("{:<24}  {:<17}  paired  conn  remem", "name", "address");
         for d in &devices {
             println!(
-                "{name:<24}  {addr:<17}  {pin:<17}  {p:<6}  {c:<4}  {r:<5}",
+                "{name:<24}  {addr:<17}  {p:<6}  {c:<4}  {r:<5}",
                 name = d.name,
                 addr = format_bd_addr(d.address),
-                pin = format_pin(wii_pin_for_address(d.address)),
                 p = if d.authenticated { "yes" } else { "no" },
                 c = if d.connected { "yes" } else { "no" },
                 r = if d.remembered { "yes" } else { "no" },
@@ -87,9 +83,8 @@ fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     eprintln!(
-        "Press SYNC inside the battery cover IMMEDIATELY before continuing.\n\
-         Scanning briefly (~5s), then authenticating. The Wii's SYNC window is\n\
-         short, so we keep the scan tight to leave time for the actual pairing."
+        "Scanning (~5s), then pairing with the direct SYNC method.\n\
+         The red SYNC button should have just been pressed; keep the board nearby."
     );
     let result = pair_first(Duration::from_secs(5))?;
     if result.already_paired {
@@ -105,7 +100,7 @@ fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             addr = format_bd_addr(result.address),
         );
     }
-    eprintln!("\nNext: cargo run --release -p balance-board-bridge");
+    eprintln!("\nNext: choose 1 in the launcher to verify live weight.");
     Ok(())
 }
 
