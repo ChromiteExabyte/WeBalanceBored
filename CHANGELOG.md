@@ -7,6 +7,11 @@ once it leaves the 0.x series.
 
 ## [Unreleased]
 
+### Hardware verification
+- On 2026-09-20, the user reported the Windows 11 workflow working after the
+  pairing, calibration-response, and button-zeroing fixes. Linux hardware,
+  measured weight accuracy, and game-controller integration remain unverified.
+
 ### Button weight zeroing
 - Tap and release the front button with the board empty to zero the weight
   on Windows and Linux. Wait for settling, then average each corner for one

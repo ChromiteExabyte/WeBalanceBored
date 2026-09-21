@@ -3,9 +3,10 @@
 A simple terminal launcher for the Wii Balance Board on **Windows and Linux**.
 Connect the board, see live weight, or use your lean as a game controller.
 
-**Experimental:** software tests pass independently of hardware. Pairing,
-Bluetooth-adapter compatibility, and the complete Steam/game path still need
-physical-board verification on each platform.
+**Hardware status (2026-09-20):** the user reports the Windows 11 workflow
+working after pairing, live-reading, and button-zeroing fixes. This covers one
+board/PC setup, not measured weight accuracy or broad adapter compatibility.
+Linux hardware and the complete Steam/game-controller path remain unverified.
 
 ## Start here — no Rust required
 
